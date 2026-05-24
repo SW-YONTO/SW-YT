@@ -26,7 +26,12 @@ const COOKIES_FILE = path.join(__dirname, 'cookies.txt');
 if (process.env.YOUTUBE_COOKIES) {
   fs.writeFileSync(COOKIES_FILE, process.env.YOUTUBE_COOKIES, 'utf8');
   console.log('[Cookies] YouTube cookies loaded from environment variable.');
+} else {
+  console.log('[Cookies] No YOUTUBE_COOKIES env var found. Running without cookies.');
 }
+console.log('[Config] YOUTUBE_DL_PATH =', process.env.YOUTUBE_DL_PATH || '(not set - using bundled)');
+console.log('[Config] Cookies file exists:', fs.existsSync(COOKIES_FILE));
+console.log('[Config] NODE_ENV =', process.env.NODE_ENV || 'not set');
 
 // Express configs
 app.set('view engine', 'ejs');
@@ -56,6 +61,25 @@ function notifyClients(downloadId) {
 }
 
 // ----------------- ROUTES -----------------
+
+// Diagnostic debug endpoint (safe read-only info)
+app.get('/api/debug', async (req, res) => {
+  const { execSync } = require('child_process');
+  let ytdlpVersion = 'unknown';
+  let systemYtdlpVersion = 'unknown';
+  try { ytdlpVersion = execSync(`"${process.env.YOUTUBE_DL_PATH || 'yt-dlp'}" --version 2>&1`).toString().trim(); } catch (e) { ytdlpVersion = e.message; }
+  try { systemYtdlpVersion = execSync('yt-dlp --version 2>&1').toString().trim(); } catch (e) { systemYtdlpVersion = 'not found in PATH'; }
+  res.json({
+    YOUTUBE_DL_PATH: process.env.YOUTUBE_DL_PATH || '(not set)',
+    cookies_file_exists: fs.existsSync(COOKIES_FILE),
+    cookies_file_size: fs.existsSync(COOKIES_FILE) ? fs.statSync(COOKIES_FILE).size + ' bytes' : '0',
+    YOUTUBE_COOKIES_env_set: !!process.env.YOUTUBE_COOKIES,
+    bundled_ytdlp_version: ytdlpVersion,
+    system_ytdlp_version: systemYtdlpVersion,
+    node_version: process.version,
+    platform: process.platform,
+  });
+});
 
 // Home Dashboard Route
 app.get('/', (req, res) => {
@@ -98,11 +122,16 @@ app.get('/api/info', async (req, res) => {
 
   // Fallback / standard route: fetch single video details using youtube-dl-exec
   try {
+    const cookiesExist = fs.existsSync(COOKIES_FILE);
+    console.log(`[Info] Fetching info for: ${url}`);
+    console.log(`[Info] Cookies file present: ${cookiesExist}`);
+    console.log(`[Info] Using binary: ${process.env.YOUTUBE_DL_PATH || 'bundled'}`);
     const output = await youtubeDl(url, {
       dumpSingleJson: true,
       noWarnings: true,
       noCheckCertificates: true,
-      ...(fs.existsSync(COOKIES_FILE) ? { cookies: COOKIES_FILE } : {})
+      format: 'best',
+      ...(cookiesExist ? { cookies: COOKIES_FILE } : {})
     }, {
       env: { ...process.env, YOUTUBE_DL_SKIP_PYTHON_CHECK: '1' }
     });
@@ -119,7 +148,7 @@ app.get('/api/info', async (req, res) => {
       views: output.view_count || 0
     });
   } catch (err) {
-    console.error('Error fetching video info:', err.message);
+    console.error('[Info] Error fetching video info:', err.message);
     return res.status(500).json({ error: 'Failed to extract video details: ' + err.message });
   }
 });
