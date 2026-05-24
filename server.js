@@ -89,8 +89,8 @@ app.get('/api/info', async (req, res) => {
     const output = await youtubeDl(url, {
       dumpSingleJson: true,
       noWarnings: true,
-      noCallHome: true,
-      noCheckCertificates: true
+      noCheckCertificates: true,
+      extractorArgs: 'youtube:player_client=ios'
     }, {
       env: { ...process.env, YOUTUBE_DL_SKIP_PYTHON_CHECK: '1' }
     });
@@ -169,7 +169,8 @@ app.post('/api/download/server', (req, res) => {
     const options = {
       output: 'downloads/%(title)s.%(ext)s',
       noWarnings: true,
-      ffmpegLocation: relativeFfmpegPath
+      ffmpegLocation: relativeFfmpegPath,
+      extractorArgs: 'youtube:player_client=ios'
     };
 
     if (format === 'mp3') {
