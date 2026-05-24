@@ -1,26 +1,30 @@
 {
-  "name": "yt-video-downloader",
+  "name": "18.yt-video-downloader",
   "version": "1.0.0",
-  "description": "YouTube video downloader application with React frontend and Express backend",
-  "private": true,
-  "workspaces": [
-    "frontend",
-    "backend"
-  ],
+  "description": "",
+  "main": "server.js",
   "scripts": {
-    "dev": "concurrently \"npm run dev:frontend\" \"npm run dev:backend\"",
-    "dev:frontend": "cd frontend && npm run dev",
-    "dev:backend": "cd backend && npm run dev",
-    "start": "cd backend && npm start",
-    "build": "cd frontend && npm run build",
-    "install:all": "npm install && concurrently \"npm run install:frontend\" \"npm run install:backend\"",
-    "install:frontend": "cd frontend && npm install",
-    "install:backend": "cd backend && npm install"
+    "start": "node server.js",
+    "dev": "node --watch server.js"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SW-YONTO/SW-YT.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/SW-YONTO/SW-YT.git/issues"
+  },
+  "homepage": "https://github.com/SW-YONTO/SW-YT.git#readme",
   "dependencies": {
-    "concurrently": "^9.1.2"
-  },
-  "engines": {
-    "node": ">=18.0.0"
+    "dotenv": "^17.4.2",
+    "ejs": "^5.0.2",
+    "express": "^5.2.1",
+    "ffmpeg-static": "^5.3.0",
+    "youtube-dl-exec": "^3.1.7",
+    "ytpl": "^2.3.0"
   }
 }

@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SW YT Downloader | Premium SW-YTify Video & Playlist Downloader</title>
+  
+  <!-- SEO & Discoverability -->
+  <meta name="description" content="SW YT Downloader (SW-YTify) is your ultimate premium tool to easily download YouTube videos and full playlists in MP4 or MP3 high quality. fast and free.">
+  <meta name="keywords" content="sw yt downloader, swty downloader, sw-yt downloader, sw ytify, youtube downloader, playlist downloader, sw esports yt downloader, premium yt downloader, mp4, mp3">
+  <meta name="author" content="SW-YTify">
+  <meta name="robots" content="index, follow">
+  
+  <!-- Open Graph / Social Media -->
+  <meta property="og:title" content="SW YT Downloader | Premium Video & Playlist Downloader">
+  <meta property="og:description" content="The ultimate tool to fetch your favorite YouTube videos and playlists in maximum quality. SW-YTify makes downloads effortless.">
+  <meta property="og:type" content="website">
+  <link rel="icon" type="image/png" href="/favicon.png?v=2">
+  <!-- Google Fonts for ultimate visual premium vibe -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;600;800&display=swap" rel="stylesheet">
+  <!-- Lucide Icons via CDN for modern clean SVG icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+  <!-- Background Decorative Glowing Blobs -->
+  <div class="glow-orb orb-1"></div>
+  <div class="glow-orb orb-2"></div>
+  <div class="glow-orb orb-3"></div>
+
+  <div class="app-container">
+    <!-- Header Banner -->
+    <header class="app-header">
+      <div class="logo-area">
+        <i data-lucide="download-cloud" class="logo-icon"></i>
+        <h1>SW-<span>YTify</span></h1>
+      </div>
+      <p class="tagline">Next-generation YouTube Video & Playlist Downloader</p>
+    </header>
+
+    <!-- Paste URL Area -->
+    <section class="search-section card">
+      <form id="search-form" class="search-form">
+        <div class="input-wrapper">
+          <i data-lucide="link" class="input-icon"></i>
+          <input 
+            type="url" 
+            id="youtube-url" 
+            placeholder="Paste YouTube Video or Playlist link here..." 
+            required 
+            autocomplete="off"
+          >
+          <button type="submit" id="search-btn" aria-label="Search" title="Search">
+            <i data-lucide="search" class="btn-icon" style="color: white; margin: 0;"></i>
+          </button>
+        </div>
+      </form>
+    </section>
+
+    <!-- Main Dynamic Content Hub -->
+    <main class="content-grid">
+      
+      <!-- Left Column: Search Result Display (Video Details or Playlist Visualizer) -->
+      <section class="result-column hidden-column">
+        
+        <!-- Loading Skeleton (Hidden by default) -->
+        <div id="loading-skeleton" class="skeleton-card card hidden">
+          <div class="skeleton-thumb"></div>
+          <div class="skeleton-text line-1"></div>
+          <div class="skeleton-text line-2"></div>
+          <div class="skeleton-text line-3"></div>
+        </div>
+
+        <!-- Video Card Display (Hidden by default) -->
+        <div id="video-card" class="video-detail-card card hidden">
+          <div class="card-badge">Single Video</div>
+          <div class="video-preview-wrapper">
+            <img id="video-thumb" src="" alt="Thumbnail">
+            <span id="video-duration" class="duration-badge">0:00</span>
+          </div>
+          <div class="video-meta">
+            <h2 id="video-title">Video Title</h2>
+            <p id="video-channel" class="channel-text"><i data-lucide="user"></i> Channel Name</p>
+            
+            <div class="download-controls">
+              <div class="control-group">
+                <label><i data-lucide="video"></i> Format</label>
+                <div class="radio-group">
+                  <label class="custom-radio">
+                    <input type="radio" name="video-type" value="mp4" checked>
+                    <span class="radio-label">MP4 (Video)</span>
+                  </label>
+                  <label class="custom-radio">
+                    <input type="radio" name="video-type" value="mp3">
+                    <span class="radio-label">MP3 (Audio)</span>
+                  </label>
+                </div>
+              </div>
+
+              <div class="control-group" id="video-quality-wrapper">
+                <label for="video-quality"><i data-lucide="sliders"></i> Video Quality</label>
+                <select id="video-quality" class="custom-select">
+                  <option value="best">Highest Quality (1080p+)</option>
+                  <option value="720p">High Quality (720p)</option>
+                </select>
+              </div>
+
+              <div class="control-group hidden" id="audio-quality-wrapper">
+                <label for="audio-quality"><i data-lucide="sliders"></i> Audio Quality</label>
+                <select id="audio-quality" class="custom-select">
+                  <option value="best">Highest (320kbps MP3)</option>
+                  <option value="192">Medium (192kbps MP3)</option>
+                  <option value="128">Standard (128kbps MP3)</option>
+                </select>
+              </div>
+
+              <div class="button-row">
+                <button id="download-server-btn" class="btn primary-btn">
+                  <i data-lucide="download"></i> Download
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Playlist Card Display (Hidden by default) -->
+        <div id="playlist-card" class="playlist-detail-card card hidden">
+          <div class="card-badge">Playlist</div>
+          <div class="playlist-header">
+            <div class="playlist-info">
+              <h2 id="playlist-title">Playlist Title</h2>
+              <p class="playlist-meta">
+                <span><i data-lucide="user"></i> <span id="playlist-author">Author</span></span>
+                <span><i data-lucide="play-circle"></i> <span id="playlist-count">0</span> videos</span>
+              </p>
+            </div>
+            
+            <div class="playlist-batch-actions">
+              <div class="playlist-format-options">
+                <div class="control-group">
+                  <label><i data-lucide="video"></i> Format</label>
+                  <div class="radio-group">
+                    <label class="custom-radio">
+                      <input type="radio" name="playlist-type" value="mp4" checked>
+                      <span class="radio-label">MP4</span>
+                    </label>
+                    <label class="custom-radio">
+                      <input type="radio" name="playlist-type" value="mp3">
+                      <span class="radio-label">MP3</span>
+                    </label>
+                  </div>
+                </div>
+
+                <div class="control-group" id="playlist-video-quality-wrapper">
+                  <label for="playlist-video-quality"><i data-lucide="sliders"></i> Video Quality</label>
+                  <select id="playlist-video-quality" class="custom-select">
+                    <option value="best">Highest (1080p+)</option>
+                    <option value="720p">High (720p)</option>
+                  </select>
+                </div>
+
+                <div class="control-group hidden" id="playlist-audio-quality-wrapper">
+                  <label for="playlist-audio-quality"><i data-lucide="sliders"></i> Audio Quality</label>
+                  <select id="playlist-audio-quality" class="custom-select">
+                    <option value="best">Highest (320kbps)</option>
+                    <option value="192">Medium (192kbps)</option>
+                    <option value="128">Standard (128kbps)</option>
+                  </select>
+                </div>
+              </div>
+              <button id="playlist-download-btn" class="btn primary-btn">
+                <i data-lucide="download-cloud"></i> Download Selected
+              </button>
+            </div>
+          </div>
+
+          <div class="playlist-items-header">
+            <label class="custom-checkbox all-select">
+              <input type="checkbox" id="select-all-videos" checked>
+              <span class="checkmark"></span>
+              Select All Videos
+            </label>
+            <span class="selection-count" id="selection-count">0 of 0 selected</span>
+          </div>
+
+          <!-- Scrollable playlist items container -->
+          <div id="playlist-items-list" class="playlist-items-list">
+            <!-- Dynamic items rendered here -->
+          </div>
+        </div>
+
+
+      </section>
+
+      <!-- Right Column: Active Downloads & Server Library -->
+      <section class="status-column">
+        
+        <!-- Active Downloads Dashboard -->
+        <div class="active-downloads-card card">
+          <div class="section-title">
+            <i data-lucide="activity" class="sec-icon"></i>
+            <h2>Active Downloads</h2>
+          </div>
+          <div id="active-downloads-list" class="active-downloads-list">
+            <div class="no-downloads-msg">No active downloads running</div>
+          </div>
+        </div>
+
+      </section>
+
+    </main>
+  </div>
+
+  <!-- Client-side logic script -->
+  <script src="/main.js"></script>
+  <script>
+    // Initialize Lucide Icons
+    lucide.createIcons();
+  </script>
+</body>
+</html>
