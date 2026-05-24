@@ -186,6 +186,7 @@ app.get('/api/info', async (req, res) => {
       noCheckCertificates: true,
       skipDownload: true,
       noCheckFormats: true,
+      jsRuntimes: 'node',
       ...(cookiesExist ? { cookies: COOKIES_FILE } : {})
     }, {
       env: { ...process.env, YOUTUBE_DL_SKIP_PYTHON_CHECK: '1' }
@@ -266,6 +267,7 @@ app.post('/api/download/server', (req, res) => {
       output: 'downloads/%(title)s.%(ext)s',
       noWarnings: true,
       ffmpegLocation: relativeFfmpegPath,
+      jsRuntimes: 'node',
       ...(fs.existsSync(COOKIES_FILE) ? { cookies: COOKIES_FILE } : {})
     };
 
