@@ -16,6 +16,13 @@ if (!fs.existsSync(DOWNLOADS_DIR)) {
   fs.mkdirSync(DOWNLOADS_DIR, { recursive: true });
 }
 
+// Write YouTube cookies from environment variable to a file (for production bot bypass)
+const COOKIES_FILE = path.join(__dirname, 'cookies.txt');
+if (process.env.YOUTUBE_COOKIES) {
+  fs.writeFileSync(COOKIES_FILE, process.env.YOUTUBE_COOKIES, 'utf8');
+  console.log('[Cookies] YouTube cookies loaded from environment variable.');
+}
+
 // Express configs
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
@@ -90,7 +97,8 @@ app.get('/api/info', async (req, res) => {
       dumpSingleJson: true,
       noWarnings: true,
       noCheckCertificates: true,
-      extractorArgs: 'youtube:player_client=android'
+      extractorArgs: 'youtube:player_client=android',
+      ...(fs.existsSync(COOKIES_FILE) ? { cookies: COOKIES_FILE } : {})
     }, {
       env: { ...process.env, YOUTUBE_DL_SKIP_PYTHON_CHECK: '1' }
     });
@@ -170,7 +178,8 @@ app.post('/api/download/server', (req, res) => {
       output: 'downloads/%(title)s.%(ext)s',
       noWarnings: true,
       ffmpegLocation: relativeFfmpegPath,
-      extractorArgs: 'youtube:player_client=android'
+      extractorArgs: 'youtube:player_client=android',
+      ...(fs.existsSync(COOKIES_FILE) ? { cookies: COOKIES_FILE } : {})
     };
 
     if (format === 'mp3') {
