@@ -97,7 +97,6 @@ app.get('/api/info', async (req, res) => {
       dumpSingleJson: true,
       noWarnings: true,
       noCheckCertificates: true,
-      extractorArgs: 'youtube:player_client=android',
       ...(fs.existsSync(COOKIES_FILE) ? { cookies: COOKIES_FILE } : {})
     }, {
       env: { ...process.env, YOUTUBE_DL_SKIP_PYTHON_CHECK: '1' }
@@ -178,7 +177,6 @@ app.post('/api/download/server', (req, res) => {
       output: 'downloads/%(title)s.%(ext)s',
       noWarnings: true,
       ffmpegLocation: relativeFfmpegPath,
-      extractorArgs: 'youtube:player_client=android',
       ...(fs.existsSync(COOKIES_FILE) ? { cookies: COOKIES_FILE } : {})
     };
 
