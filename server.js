@@ -417,6 +417,30 @@ app.post('/api/download/cancel', (req, res) => {
   return res.status(400).json({ error: 'Cannot cancel download' });
 });
 
+// Serve and Auto-Delete Downloaded File
+app.get('/api/download/file/:filename', (req, res) => {
+  const filename = req.params.filename;
+  if (!filename) return res.status(400).send('Filename required');
+  
+  const filePath = path.join(DOWNLOADS_DIR, filename);
+  
+  if (fs.existsSync(filePath)) {
+    res.download(filePath, filename, (err) => {
+      // Auto-delete the file after the user downloads it!
+      try {
+        if (fs.existsSync(filePath)) {
+          fs.unlinkSync(filePath);
+          console.log(`[Cleanup] Deleted file after serving: ${filename}`);
+        }
+      } catch (e) {
+        console.error(`[Cleanup] Failed to delete ${filename}:`, e);
+      }
+    });
+  } else {
+    res.status(404).send('File not found or already deleted');
+  }
+});
+
 // Direct Streaming Download (Sends binary stream straight to browser)
 app.get('/api/download/stream', (req, res) => {
   const { url, format, title } = req.query;

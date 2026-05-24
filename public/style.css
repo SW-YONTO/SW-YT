@@ -1291,8 +1291,9 @@ body {
   border-radius: 50%;
 }
 
-.cancel-btn:hover {
-  background: rgba(255, 75, 75, 0.1);
+.cancel-btn:hover, .cancel-btn:active {
+  background: #ff3333;
+  color: #ffffff;
   transform: scale(1.1);
 }
 
