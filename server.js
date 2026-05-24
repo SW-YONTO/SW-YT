@@ -1,11 +1,16 @@
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
-const youtubeDl = require('youtube-dl-exec');
+const { create } = require('youtube-dl-exec');
 const ytpl = require('ytpl');
 const ffmpegPath = require('ffmpeg-static');
 const relativeFfmpegPath = path.relative(process.cwd(), ffmpegPath);
 require('dotenv').config();
+
+// Use system yt-dlp binary if set (Railway production), otherwise use bundled
+const youtubeDl = process.env.YOUTUBE_DL_PATH
+  ? create(process.env.YOUTUBE_DL_PATH)
+  : require('youtube-dl-exec');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
