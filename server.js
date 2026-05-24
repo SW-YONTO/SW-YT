@@ -134,7 +134,8 @@ app.get('/api/info', async (req, res) => {
       dumpSingleJson: true,
       noWarnings: true,
       noCheckCertificates: true,
-      format: 'best',
+      skipDownload: true,
+      noCheckFormats: true,
       ...(cookiesExist ? { cookies: COOKIES_FILE } : {})
     }, {
       env: { ...process.env, YOUTUBE_DL_SKIP_PYTHON_CHECK: '1' }
