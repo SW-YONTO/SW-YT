@@ -1269,3 +1269,39 @@ body {
   min-height: 0;
   padding-right: 6px;
 }
+
+/* Cancel Button Styles */
+.job-header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cancel-btn {
+  background: transparent;
+  border: none;
+  color: var(--status-error);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  padding: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+}
+
+.cancel-btn:hover {
+  background: rgba(255, 75, 75, 0.1);
+  transform: scale(1.1);
+}
+
+.cancel-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.download-job-card:hover .cancel-btn {
+  opacity: 1;
+}

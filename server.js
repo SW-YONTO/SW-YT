@@ -256,7 +256,8 @@ app.post('/api/download/server', (req, res) => {
     speed: '0KB/s',
     eta: '--:--',
     status: 'pending',
-    filename: null
+    filename: null,
+    cp: null
   };
 
   res.json({ success: true, downloadId });
@@ -296,6 +297,7 @@ app.post('/api/download/server', (req, res) => {
       env: { ...process.env, YOUTUBE_DL_SKIP_PYTHON_CHECK: '1' }
     });
 
+    activeDownloads[downloadId].cp = cp;
     activeDownloads[downloadId].status = 'downloading';
     notifyClients(downloadId);
 
@@ -384,6 +386,35 @@ app.post('/api/download/server', (req, res) => {
   };
 
   runDownload();
+});
+
+// Cancel Download Endpoint
+app.post('/api/download/cancel', (req, res) => {
+  const { downloadId } = req.body;
+  if (!downloadId || !activeDownloads[downloadId]) {
+    return res.status(404).json({ error: 'Download not found' });
+  }
+
+  const job = activeDownloads[downloadId];
+  if (job.status === 'downloading' || job.status === 'pending') {
+    if (job.cp) {
+      try { job.cp.kill('SIGINT'); } catch (e) {}
+    }
+    
+    if (job.filename && fs.existsSync(job.filename)) {
+      try { fs.unlinkSync(job.filename); } catch (e) {}
+    } else if (job.filename && fs.existsSync(job.filename + '.part')) {
+      try { fs.unlinkSync(job.filename + '.part'); } catch (e) {}
+    }
+
+    job.status = 'cancelled';
+    notifyClients(downloadId);
+    
+    setTimeout(() => { delete activeDownloads[downloadId]; }, 5000);
+    return res.json({ success: true });
+  }
+
+  return res.status(400).json({ error: 'Cannot cancel download' });
 });
 
 // Direct Streaming Download (Sends binary stream straight to browser)

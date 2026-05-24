@@ -344,7 +344,14 @@ document.addEventListener('DOMContentLoaded', () => {
     card.innerHTML = `
       <div class="job-header">
         <span class="job-title" title="${job.title}">${job.title}</span>
-        <span class="job-badge status-${job.status}">${job.status}</span>
+        <div class="job-header-right">
+          <span class="job-badge status-${job.status}">${job.status}</span>
+          ${(job.status === 'downloading' || job.status === 'pending') ? `
+            <button class="cancel-btn" onclick="cancelDownload('${id}')" title="Cancel">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
+            </button>
+          ` : ''}
+        </div>
       </div>
       <div class="progress-bar-container">
         <div class="progress-bar-fill" style="width: ${job.percent}%"></div>
@@ -409,5 +416,27 @@ document.addEventListener('DOMContentLoaded', () => {
       }, 5000);
     }
   }
+
+
+  // Expose global cancel function for the inline onclick handler
+  window.cancelDownload = async (id) => {
+    try {
+      const btn = document.querySelector(`#job-${id} .cancel-btn`);
+      if (btn) btn.disabled = true;
+      
+      const res = await fetch('/api/download/cancel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ downloadId: id })
+      });
+      const data = await res.json();
+      if (!data.success) {
+        console.error('Failed to cancel download:', data.error);
+        if (btn) btn.disabled = false;
+      }
+    } catch (err) {
+      console.error('Network error cancelling download:', err);
+    }
+  };
 
 });
