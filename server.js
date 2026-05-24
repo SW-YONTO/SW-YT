@@ -24,10 +24,14 @@ if (!fs.existsSync(DOWNLOADS_DIR)) {
 // Write YouTube cookies from environment variable to a file (for production bot bypass)
 const COOKIES_FILE = path.join(__dirname, 'cookies.txt');
 if (process.env.YOUTUBE_COOKIES) {
-  fs.writeFileSync(COOKIES_FILE, process.env.YOUTUBE_COOKIES, 'utf8');
+  // Railway stores multi-line env vars with literal \n — convert back to real newlines
+  const cookiesContent = process.env.YOUTUBE_COOKIES.replace(/\\n/g, '\n');
+  fs.writeFileSync(COOKIES_FILE, cookiesContent, 'utf8');
   console.log('[Cookies] YouTube cookies loaded from environment variable.');
+  console.log('[Cookies] File size:', fs.statSync(COOKIES_FILE).size, 'bytes');
+  console.log('[Cookies] First line:', cookiesContent.split('\n')[0]);
 } else {
-  console.log('[Cookies] No YOUTUBE_COOKIES env var found. Running without cookies.');
+  console.log('[Cookies] No YOUTUBE_COOKIES env var found. Running without cookies.')
 }
 console.log('[Config] YOUTUBE_DL_PATH =', process.env.YOUTUBE_DL_PATH || '(not set - using bundled)');
 console.log('[Config] Cookies file exists:', fs.existsSync(COOKIES_FILE));
