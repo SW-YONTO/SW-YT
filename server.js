@@ -96,10 +96,12 @@ app.get('/api/test-ytdlp', async (req, res) => {
   const cookiesStr = fs.existsSync(COOKIES_FILE) ? `--cookies "${COOKIES_FILE}"` : '';
 
   const tests = [
-    { name: '1. No Cookies, Default Client', cmd: `"${ytdlpPath}" -j --skip-download "${url}"` },
-    { name: '2. With Cookies, Default Client', cmd: `"${ytdlpPath}" -j --skip-download ${cookiesStr} "${url}"` },
-    { name: '3. With Cookies, Android Client', cmd: `"${ytdlpPath}" -j --skip-download ${cookiesStr} --extractor-args "youtube:player_client=android" "${url}"` },
-    { name: '4. With Cookies, iOS Client', cmd: `"${ytdlpPath}" -j --skip-download ${cookiesStr} --extractor-args "youtube:player_client=ios" "${url}"` }
+    { name: '5. No Cookies, Android Client', cmd: `"${ytdlpPath}" -j --skip-download --extractor-args "youtube:player_client=android" "${url}"` },
+    { name: '6. No Cookies, iOS Client', cmd: `"${ytdlpPath}" -j --skip-download --extractor-args "youtube:player_client=ios" "${url}"` },
+    { name: '7. No Cookies, TV Client', cmd: `"${ytdlpPath}" -j --skip-download --extractor-args "youtube:player_client=tv" "${url}"` },
+    { name: '8. With Cookies, Force IPv4', cmd: `"${ytdlpPath}" -j --skip-download --force-ipv4 ${cookiesStr} "${url}"` },
+    { name: '9. With Cookies, Force IPv6', cmd: `"${ytdlpPath}" -j --skip-download --force-ipv6 ${cookiesStr} "${url}"` },
+    { name: '10. With Cookies, Node JS Runtime', cmd: `"${ytdlpPath}" -j --skip-download --js-runtimes node ${cookiesStr} "${url}"` }
   ];
 
   let results = [];
