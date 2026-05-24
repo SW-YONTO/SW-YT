@@ -85,6 +85,54 @@ app.get('/api/debug', async (req, res) => {
   });
 });
 
+// Advanced yt-dlp diagnosis endpoint
+app.get('/api/test-ytdlp', async (req, res) => {
+  const { exec } = require('child_process');
+  const util = require('util');
+  const execPromise = util.promisify(exec);
+  
+  const url = req.query.url || 'https://youtu.be/TCv8V-zsfRM';
+  const ytdlpPath = process.env.YOUTUBE_DL_PATH || 'yt-dlp';
+  const cookiesStr = fs.existsSync(COOKIES_FILE) ? `--cookies "${COOKIES_FILE}"` : '';
+
+  const tests = [
+    { name: '1. No Cookies, Default Client', cmd: `"${ytdlpPath}" -j --skip-download "${url}"` },
+    { name: '2. With Cookies, Default Client', cmd: `"${ytdlpPath}" -j --skip-download ${cookiesStr} "${url}"` },
+    { name: '3. With Cookies, Android Client', cmd: `"${ytdlpPath}" -j --skip-download ${cookiesStr} --extractor-args "youtube:player_client=android" "${url}"` },
+    { name: '4. With Cookies, iOS Client', cmd: `"${ytdlpPath}" -j --skip-download ${cookiesStr} --extractor-args "youtube:player_client=ios" "${url}"` }
+  ];
+
+  let results = [];
+  
+  for (const test of tests) {
+    try {
+      const { stdout, stderr } = await execPromise(test.cmd, { timeout: 15000 });
+      results.push({
+        test: test.name,
+        success: true,
+        cmd: test.cmd,
+        stderr: stderr.trim(),
+        stdoutSnippet: stdout ? stdout.substring(0, 150) + '...' : 'empty'
+      });
+    } catch (err) {
+      results.push({
+        test: test.name,
+        success: false,
+        cmd: test.cmd,
+        error: err.message,
+        stderr: err.stderr ? err.stderr.trim() : ''
+      });
+    }
+  }
+
+  res.json({
+    targetUrl: url,
+    binary: ytdlpPath,
+    cookiesPresent: fs.existsSync(COOKIES_FILE),
+    results
+  });
+});
+
 // Home Dashboard Route
 app.get('/', (req, res) => {
   res.render('index');
