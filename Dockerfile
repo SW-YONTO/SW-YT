@@ -1,4 +1,4 @@
-FROM node:18-bullseye-slim
+FROM node:20-bookworm-slim
 
 # Install Python 3 (required by youtube-dl-exec / yt-dlp to extract videos)
 RUN apt-get update && apt-get install -y python3 && rm -rf /var/lib/apt/lists/*
