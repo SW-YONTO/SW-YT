@@ -21,17 +21,21 @@ if (!fs.existsSync(DOWNLOADS_DIR)) {
   fs.mkdirSync(DOWNLOADS_DIR, { recursive: true });
 }
 
-// Write YouTube cookies from environment variable to a file (for production bot bypass)
+// Write cookies from environment variable to a file (for production bot bypass)
 const COOKIES_FILE = path.join(__dirname, 'cookies.txt');
-if (process.env.YOUTUBE_COOKIES) {
+const envCookies = process.env.COOKIES_CONTENT || process.env.YOUTUBE_COOKIES;
+
+if (envCookies) {
   // Railway stores multi-line env vars with literal \n — convert back to real newlines
-  const cookiesContent = process.env.YOUTUBE_COOKIES.replace(/\\n/g, '\n');
+  const cookiesContent = envCookies.replace(/\\n/g, '\n');
   fs.writeFileSync(COOKIES_FILE, cookiesContent, 'utf8');
-  console.log('[Cookies] YouTube cookies loaded from environment variable.');
+  console.log('[Cookies] Cookies loaded from environment variable.');
   console.log('[Cookies] File size:', fs.statSync(COOKIES_FILE).size, 'bytes');
   console.log('[Cookies] First line:', cookiesContent.split('\n')[0]);
+} else if (fs.existsSync(COOKIES_FILE)) {
+  console.log('[Cookies] Local cookies.txt found. Using local file.');
 } else {
-  console.log('[Cookies] No YOUTUBE_COOKIES env var found. Running without cookies.')
+  console.log('[Cookies] No cookies found in environment or local cookies.txt. Running without cookies.')
 }
 console.log('[Config] YOUTUBE_DL_PATH =', process.env.YOUTUBE_DL_PATH || '(not set - using bundled)');
 console.log('[Config] Cookies file exists:', fs.existsSync(COOKIES_FILE));
@@ -77,12 +81,40 @@ app.get('/api/debug', async (req, res) => {
     YOUTUBE_DL_PATH: process.env.YOUTUBE_DL_PATH || '(not set)',
     cookies_file_exists: fs.existsSync(COOKIES_FILE),
     cookies_file_size: fs.existsSync(COOKIES_FILE) ? fs.statSync(COOKIES_FILE).size + ' bytes' : '0',
-    YOUTUBE_COOKIES_env_set: !!process.env.YOUTUBE_COOKIES,
+    COOKIES_ENV_SET: !!(process.env.COOKIES_CONTENT || process.env.YOUTUBE_COOKIES),
     bundled_ytdlp_version: ytdlpVersion,
     system_ytdlp_version: systemYtdlpVersion,
     node_version: process.version,
     platform: process.platform,
   });
+});
+
+// Check all files in downloads folder
+app.get('/api/downloads/status', (req, res) => {
+  try {
+    const files = fs.readdirSync(DOWNLOADS_DIR);
+    res.json({
+      count: files.length,
+      files: files
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to read directory' });
+  }
+});
+
+// Delete all files in downloads folder
+app.delete('/api/downloads/all', (req, res) => {
+  try {
+    const files = fs.readdirSync(DOWNLOADS_DIR);
+    let deletedCount = 0;
+    files.forEach(file => {
+      fs.unlinkSync(path.join(DOWNLOADS_DIR, file));
+      deletedCount++;
+    });
+    res.json({ success: true, deletedCount });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to delete files' });
+  }
 });
 
 // Advanced yt-dlp diagnosis endpoint
@@ -319,7 +351,9 @@ app.post('/api/download/server', (req, res) => {
       // Check for filename destinations
       const destMatch = line.match(/\[download\] Destination: (.+)/) ||
                         line.match(/\[Merging formats into "(.+)"\]/) ||
-                        line.match(/\[ffmpeg\] Destination: (.+)/);
+                        line.match(/\[ffmpeg\] Destination: (.+)/) ||
+                        line.match(/\[ExtractAudio\] Destination: (.+)/) ||
+                        line.match(/\[FixupM3u8\] Destination: (.+)/);
       if (destMatch) {
         const filePath = destMatch[1];
         activeDownloads[downloadId].filename = path.basename(filePath);
@@ -332,12 +366,21 @@ app.post('/api/download/server', (req, res) => {
       activeDownloads[downloadId].speed = '--';
       activeDownloads[downloadId].eta = '00:00';
       
-      // Double check if filename wasn't captured, check download directory
+      if (activeDownloads[downloadId].filename) {
+        // Ensure the file actually exists, it might have been replaced (e.g. m4a -> mp3)
+        const checkPath = path.join(DOWNLOADS_DIR, activeDownloads[downloadId].filename);
+        if (!fs.existsSync(checkPath)) {
+          activeDownloads[downloadId].filename = null; // force fallback
+        }
+      }
+
+      // Double check if filename wasn't captured or was cleared, check download directory
       if (!activeDownloads[downloadId].filename) {
         try {
           const files = fs.readdirSync(DOWNLOADS_DIR);
-          // Find most recently modified file as fallback
+          // Find most recently modified file as fallback, ignoring partials
           const newest = files
+            .filter(f => !f.endsWith('.part') && !f.endsWith('.ytdl'))
             .map(file => ({ file, time: fs.statSync(path.join(DOWNLOADS_DIR, file)).mtime.getTime() }))
             .sort((a, b) => b.time - a.time)[0];
           if (newest) {
@@ -417,28 +460,22 @@ app.post('/api/download/cancel', (req, res) => {
   return res.status(400).json({ error: 'Cannot cancel download' });
 });
 
-// Serve and Auto-Delete Downloaded File
+// Serve Downloaded File without auto-deleting (fixes client HTML download bug)
 app.get('/api/download/file/:filename', (req, res) => {
   const filename = req.params.filename;
   if (!filename) return res.status(400).send('Filename required');
   
   const filePath = path.join(DOWNLOADS_DIR, filename);
   
-  if (fs.existsSync(filePath)) {
-    res.download(filePath, filename, (err) => {
-      // Auto-delete the file after the user downloads it!
-      try {
-        if (fs.existsSync(filePath)) {
-          fs.unlinkSync(filePath);
-          console.log(`[Cleanup] Deleted file after serving: ${filename}`);
-        }
-      } catch (e) {
-        console.error(`[Cleanup] Failed to delete ${filename}:`, e);
-      }
-    });
-  } else {
-    res.status(404).send('File not found or already deleted');
+  if (!fs.existsSync(filePath)) {
+    return res.status(404).send('File not found.');
   }
+
+  res.download(filePath, filename, (err) => {
+    if (err) {
+      console.error(`Error during file download response for ${filename}:`, err.message);
+    }
+  });
 });
 
 // Direct Streaming Download (Sends binary stream straight to browser)
@@ -525,18 +562,7 @@ app.get('/api/library/play/:filename', (req, res) => {
   res.sendFile(filePath);
 });
 
-// Dedicated route to download the completed file to the user's system
-app.get('/api/download/file/:filename', (req, res) => {
-  const filePath = path.join(DOWNLOADS_DIR, req.params.filename);
-  if (!fs.existsSync(filePath)) {
-    return res.status(404).send('File not found.');
-  }
-  res.download(filePath, req.params.filename, (err) => {
-    if (err) {
-      console.error('Error during file download response:', err);
-    }
-  });
-});
+
 
 // Library API: Delete a file
 app.delete('/api/library/:filename', (req, res) => {
