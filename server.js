@@ -246,13 +246,29 @@ app.get('/api/info', async (req, res) => {
       noCheckCertificates: true,
       skipDownload: true,
       noCheckFormats: true,
+      flatPlaylist: true,
       jsRuntimes: 'node',
       ...(cookiesExist ? { cookies: COOKIES_FILE } : {})
-    }, {
-      env: { ...process.env, YOUTUBE_DL_SKIP_PYTHON_CHECK: '1' }
     });
 
-    // Extract formatted durations and simple fields
+    if (output._type === 'playlist' || output.entries) {
+      return res.json({
+        isPlaylist: true,
+        id: output.id,
+        title: output.title || 'Playlist',
+        author: output.uploader || output.channel || 'Unknown',
+        videoCount: output.entries ? output.entries.length : 0,
+        thumbnail: output.thumbnails && output.thumbnails.length > 0 ? output.thumbnails[0].url : '',
+        items: (output.entries || []).map(item => ({
+          id: item.id,
+          title: item.title,
+          url: item.url || item.webpage_url || (item.id ? `https://www.youtube.com/watch?v=${item.id}` : url),
+          duration: item.duration || 0,
+          thumbnail: item.thumbnails && item.thumbnails.length > 0 ? item.thumbnails[0].url : ''
+        }))
+      });
+    }
+
     return res.json({
       isPlaylist: false,
       id: output.id,
