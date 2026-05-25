@@ -239,6 +239,42 @@ app.get('/api/info', async (req, res) => {
     const cookiesExist = fs.existsSync(COOKIES_FILE);
     console.log(`[Info] Fetching info for: ${url}`);
     console.log(`[Info] Cookies file present: ${cookiesExist}`);
+    
+    // --- Instagram Pre-Processor ---
+    if (url.includes('instagram.com')) {
+      try {
+        const { instagramGetUrl } = require('instagram-url-direct');
+        const igData = await instagramGetUrl(url);
+        
+        if (igData && igData.url_list && igData.url_list.length > 0) {
+          const isMulti = igData.results_number > 1;
+          const firstUrl = igData.url_list[0].toLowerCase();
+          const isImage = firstUrl.includes('.jpg') || firstUrl.includes('.webp') || firstUrl.includes('stp=dst-jpg');
+          
+          if (isMulti || isImage) {
+            return res.json({
+              isPlaylist: true,
+              isImageCarousel: true,
+              id: igData.post_info?.owner_username + '_' + Date.now(),
+              title: igData.post_info?.caption?.substring(0, 40) || 'Instagram Post',
+              author: igData.post_info?.owner_username || 'Instagram',
+              videoCount: igData.results_number,
+              thumbnail: igData.url_list[0],
+              items: igData.url_list.map((mediaUrl, idx) => ({
+                id: 'ig_' + idx,
+                title: `Image ${idx + 1}`,
+                url: mediaUrl,
+                duration: 0,
+                thumbnail: mediaUrl
+              }))
+            });
+          }
+        }
+      } catch (igErr) {
+        console.error('[Info] IG Scraper early fetch failed:', igErr.message);
+      }
+    }
+    
     console.log(`[Info] Using binary: ${process.env.YOUTUBE_DL_PATH || 'bundled'}`);
     const output = await youtubeDl(url, {
       dumpSingleJson: true,
@@ -273,41 +309,12 @@ app.get('/api/info', async (req, res) => {
       isPlaylist: false,
       id: output.id,
       title: output.title,
-      description: output.description || '',
       duration: output.duration,
-      channel: output.channel || output.uploader || 'Unknown Channel',
-      thumbnail: output.thumbnail || (output.thumbnails && output.thumbnails[0]?.url) || '',
+      thumbnail: output.thumbnail,
+      channel: output.uploader,
       views: output.view_count || 0
     });
   } catch (err) {
-    if (url.includes('instagram.com')) {
-      try {
-        const { instagramGetUrl } = require('instagram-url-direct');
-        const igData = await instagramGetUrl(url);
-        
-        if (igData && igData.url_list && igData.url_list.length > 0) {
-          return res.json({
-            isPlaylist: true,
-            isImageCarousel: true,
-            id: igData.post_info?.owner_username + '_' + Date.now(),
-            title: igData.post_info?.caption?.substring(0, 40) || 'Instagram Post',
-            author: igData.post_info?.owner_username || 'Instagram',
-            videoCount: igData.results_number,
-            thumbnail: igData.url_list[0],
-            items: igData.media_details.map((media, idx) => ({
-              id: 'ig_' + idx,
-              title: `Image ${idx + 1}`,
-              url: media.url,
-              duration: 0,
-              thumbnail: media.url
-            }))
-          });
-        }
-      } catch (igErr) {
-        console.error('[Info] IG Scraper failed:', igErr.message);
-      }
-    }
-
     console.error('[Info] Error fetching video info:', err.message);
     return res.status(500).json({ error: 'Failed to extract video details: ' + err.message });
   }
