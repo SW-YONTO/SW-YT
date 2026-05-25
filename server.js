@@ -564,6 +564,8 @@ function downloadDirectImage(url, title, downloadId) {
       fileStream.close();
       activeDownloads[downloadId].status = 'completed';
       activeDownloads[downloadId].progress = '100%';
+      activeDownloads[downloadId].percent = 100;
+      activeDownloads[downloadId].filename = path.basename(filePath);                          // ← FIXED: frontend reads .filename to trigger browser download
       activeDownloads[downloadId].downloadUrl = `/api/download/file/${path.basename(filePath)}`;
       notifyClients(downloadId);
     });
