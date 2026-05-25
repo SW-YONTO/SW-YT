@@ -500,6 +500,12 @@ app.get('/api/download/progress', (req, res) => {
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
 
+  // Assign a unique ID to this browser tab/connection
+  const clientId = Date.now().toString() + '_' + Math.random().toString(36).substr(2, 9);
+
+  // Send the clientId to the browser immediately so it knows who it is
+  res.write(`data: ${JSON.stringify({ type: 'connected', clientId })}\n\n`);
+
   // Filter in-memory downloads to only broadcast ongoing (pending/downloading) jobs on new load/refresh
   const ongoingDownloads = {};
   for (const [id, job] of Object.entries(activeDownloads)) {
@@ -508,10 +514,9 @@ app.get('/api/download/progress', (req, res) => {
     }
   }
 
-  // Immediately send initial state of ongoing jobs
+  // Send current ongoing jobs state
   res.write(`data: ${JSON.stringify({ type: 'init', downloads: ongoingDownloads })}\n\n`);
 
-  const clientId = Date.now();
   const newClient = { id: clientId, res };
   clients.push(newClient);
 
@@ -579,7 +584,7 @@ function downloadDirectImage(url, title, downloadId) {
 
 // Start Server-Side Download Job
 app.post('/api/download/server', (req, res) => {
-  const { url, format, title } = req.body;
+  const { url, format, title, ownerClientId } = req.body;
   if (!url) {
     return res.status(400).json({ error: 'URL is required.' });
   }
@@ -587,6 +592,8 @@ app.post('/api/download/server', (req, res) => {
   const downloadId = Date.now().toString() + '_' + Math.random().toString(36).substr(2, 5);
 
   // Set up details in memory
+  // ownerClientId tags which browser tab started this download — only THAT tab
+  // will receive the browser file push; other tabs just see the progress card.
   activeDownloads[downloadId] = {
     title: title || 'Extracting title...',
     url,
@@ -596,7 +603,8 @@ app.post('/api/download/server', (req, res) => {
     eta: '--:--',
     status: 'pending',
     filename: null,
-    cp: null
+    cp: null,
+    ownerClientId: ownerClientId || null
   };
 
   // Fast-path direct downloader for images

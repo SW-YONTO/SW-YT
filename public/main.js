@@ -41,6 +41,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Global State Stores
   let currentMetadata = null; // Stored metadata of parsed item
   let activeDownloads = {}; // Current ongoing downloads dict
+  let myClientId = null; // Unique ID assigned by server to THIS browser tab via SSE
 
   // Helper formatting for seconds to MM:SS
   function formatSeconds(seconds) {
@@ -225,7 +226,8 @@ document.addEventListener('DOMContentLoaded', () => {
         body: JSON.stringify({
           url,
           format,
-          title: currentMetadata.title
+          title: currentMetadata.title,
+          ownerClientId: myClientId   // tag this job so only THIS tab triggers the browser download
         })
       });
       const data = await res.json();
@@ -273,7 +275,8 @@ document.addEventListener('DOMContentLoaded', () => {
           body: JSON.stringify({
             url: item.url,
             format,
-            title: item.title
+            title: item.title,
+            ownerClientId: myClientId   // tag this job so only THIS tab triggers the browser download
           })
         });
         // Wait 2 seconds between jobs to prevent rate-limiting (skip delay after last item)
@@ -304,8 +307,13 @@ document.addEventListener('DOMContentLoaded', () => {
   eventSource.onmessage = (event) => {
     try {
       const data = JSON.parse(event.data);
-      
-      if (data.type === 'init') {
+
+      if (data.type === 'connected') {
+        // Server assigned us a unique ID for this browser tab session
+        myClientId = data.clientId;
+        console.log('[SSE] Connected. My client ID:', myClientId);
+
+      } else if (data.type === 'init') {
         // Keep completed/error downloads that are currently in activeDownloads to prevent auto-clearing
         const preservedDownloads = {};
         for (const [id, job] of Object.entries(activeDownloads)) {
@@ -315,13 +323,16 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         activeDownloads = { ...preservedDownloads, ...data.downloads };
         renderAllDownloads();
+
       } else if (data.type === 'update') {
         activeDownloads[data.downloadId] = data.job;
         updateDownloadCard(data.downloadId, data.job);
-        
-        // If completed, trigger browser download
+
+        // Only trigger browser download on the tab that OWNS this job
+        // This prevents all open tabs/devices from downloading the same file
         if (data.job.status === 'completed' && data.job.filename) {
-          if (!triggeredDownloads.has(data.downloadId)) {
+          const isOwner = data.job.ownerClientId && data.job.ownerClientId === myClientId;
+          if (isOwner && !triggeredDownloads.has(data.downloadId)) {
             triggeredDownloads.add(data.downloadId);
             triggerBrowserDownload(data.job.filename);
           }
