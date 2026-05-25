@@ -341,7 +341,7 @@ app.post('/api/download/server', (req, res) => {
         options.format = 'bestaudio/best';
       }
     } else if (format === '720p') {
-      options.format = 'best[height<=720]';
+      options.format = 'best[height<=720]/best';
     } else {
       if (isRetry) {
         // Fallback: download highest pre-merged single video file (no ffmpeg merging required)
@@ -432,8 +432,7 @@ app.post('/api/download/server', (req, res) => {
 
       const isFfmpegError = (err.stderr || '').includes('ffmpeg not found') || 
                             (err.stderr || '').includes('ffprobe not found') ||
-                            err.message.includes('ffmpeg') ||
-                            err.message.includes('ffprobe');
+                            (err.stderr || '').includes('ffprobe or avprobe not found');
 
       if (isFfmpegError && !isRetry) {
         console.warn(`[DOWNLOAD WARNING] ffmpeg/ffprobe not found on host system.`);
@@ -529,7 +528,7 @@ app.get('/api/download/stream', (req, res) => {
     options.audioQuality = '0';
     options.format = 'bestaudio/best';
   } else if (format === '720p') {
-    options.format = 'best[height<=720]';
+    options.format = 'best[height<=720]/best';
   } else {
     options.format = 'best'; // standard pre-merged for quick streaming without ffmpeg lag
   }
