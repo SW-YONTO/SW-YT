@@ -259,8 +259,10 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
     
-    // Start downloads sequentially/parallelly in background
-    for (let cb of checkedBoxes) {
+    // Start downloads with staggered delay to avoid YouTube rate-limiting
+    const delay = (ms) => new Promise(r => setTimeout(r, ms));
+    for (let i = 0; i < checkedBoxes.length; i++) {
+      const cb = checkedBoxes[i];
       const idx = parseInt(cb.getAttribute('data-index'));
       const item = currentMetadata.items[idx];
       
@@ -274,6 +276,10 @@ document.addEventListener('DOMContentLoaded', () => {
             title: item.title
           })
         });
+        // Wait 2 seconds between jobs to prevent rate-limiting (skip delay after last item)
+        if (i < checkedBoxes.length - 1) {
+          await delay(2000);
+        }
       } catch (err) {
         console.error('Failed to trigger playlist item download:', item.title, err);
       }

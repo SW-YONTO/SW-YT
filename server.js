@@ -240,22 +240,24 @@ app.get('/api/info', async (req, res) => {
     console.log(`[Info] Fetching info for: ${url}`);
     console.log(`[Info] Cookies file present: ${cookiesExist}`);
     
+    const isInstagram = url.includes('instagram.com');
+    const isInstaPost = isInstagram && url.includes('/p/');
+    const isInstaReel = isInstagram && url.includes('/reel/');
+    
     // --- Instagram Pre-Processor ---
-    if (url.includes('instagram.com')) {
+    // For ALL Instagram links, try instagram-url-direct first
+    if (isInstagram) {
       try {
         const { instagramGetUrl } = require('instagram-url-direct');
         const igData = await instagramGetUrl(url);
         
         if (igData && igData.url_list && igData.url_list.length > 0) {
-          const isMulti = igData.results_number > 1;
-          const firstUrl = igData.url_list[0].toLowerCase();
-          const isImage = firstUrl.includes('.jpg') || firstUrl.includes('.webp') || firstUrl.includes('stp=dst-jpg');
-          
-          if (isMulti || isImage) {
+          // For /p/ posts: ALWAYS return as image carousel (even if 1 image)
+          if (isInstaPost) {
             return res.json({
               isPlaylist: true,
               isImageCarousel: true,
-              id: igData.post_info?.owner_username + '_' + Date.now(),
+              id: (igData.post_info?.owner_username || 'ig') + '_' + Date.now(),
               title: igData.post_info?.caption?.substring(0, 40) || 'Instagram Post',
               author: igData.post_info?.owner_username || 'Instagram',
               videoCount: igData.results_number,
@@ -269,9 +271,18 @@ app.get('/api/info', async (req, res) => {
               }))
             });
           }
+          // For /reel/ URLs: if IG scraper got a video URL, return as single video
+          // Otherwise fall through to yt-dlp for better quality
         }
       } catch (igErr) {
         console.error('[Info] IG Scraper early fetch failed:', igErr.message);
+        // For /p/ posts, if IG scraper fails, DON'T fall to yt-dlp (it will hang on image posts)
+        if (isInstaPost) {
+          return res.status(500).json({ 
+            error: 'Instagram is temporarily blocking this server. Please try again in a few minutes.' 
+          });
+        }
+        // For /reel/ URLs, fall through to yt-dlp below
       }
     }
     
@@ -311,11 +322,19 @@ app.get('/api/info', async (req, res) => {
       title: output.title,
       duration: output.duration,
       thumbnail: output.thumbnail,
-      channel: output.uploader,
+      channel: output.uploader || output.channel || 'Unknown',
       views: output.view_count || 0
     });
   } catch (err) {
     console.error('[Info] Error fetching video info:', err.message);
+    
+    // Better error messages for Instagram
+    if (url.includes('instagram.com')) {
+      return res.status(500).json({ 
+        error: 'Instagram is temporarily blocking this server. Please try again in a few minutes.' 
+      });
+    }
+    
     return res.status(500).json({ error: 'Failed to extract video details: ' + err.message });
   }
 });
