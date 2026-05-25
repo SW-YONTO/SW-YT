@@ -145,7 +145,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <input type="checkbox" class="video-checkbox" data-index="${index}" checked>
             <span class="checkmark"></span>
           </label>
-          <img src="${item.thumbnail}" class="playlist-item-thumb" alt="Thumb" onerror="this.src='https://images.unsplash.com/photo-1611162617213-7d7a39e9b1d7?w=150&auto=format&fit=crop'">
+          <img src="/api/proxy-image?url=${encodeURIComponent(item.thumbnail)}" class="playlist-item-thumb" alt="Thumb" onerror="this.src='https://images.unsplash.com/photo-1611162617213-7d7a39e9b1d7?w=150&auto=format&fit=crop'">
           <div class="playlist-item-meta">
             <h4>${item.title}</h4>
             <p>${item.duration || '0:00'}</p>
@@ -162,7 +162,7 @@ document.addEventListener('DOMContentLoaded', () => {
       videoTitle.textContent = data.title;
       videoChannel.innerHTML = `<i data-lucide="user"></i> ${data.channel}`;
       videoDuration.textContent = formatSeconds(data.duration);
-      videoThumb.src = data.thumbnail || 'https://images.unsplash.com/photo-1611162617213-7d7a39e9b1d7?w=600&auto=format&fit=crop';
+      videoThumb.src = data.thumbnail ? `/api/proxy-image?url=${encodeURIComponent(data.thumbnail)}` : 'https://images.unsplash.com/photo-1611162617213-7d7a39e9b1d7?w=600&auto=format&fit=crop';
       
       videoCard.classList.remove('hidden');
       lucide.createIcons(); // render channel icon

@@ -1,6 +1,8 @@
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
+const https = require('https');
+const http = require('http');
 const { create } = require('youtube-dl-exec');
 const ytpl = require('ytpl');
 const ffmpegPath = require('ffmpeg-static');
@@ -265,6 +267,35 @@ app.get('/api/info', async (req, res) => {
     console.error('[Info] Error fetching video info:', err.message);
     return res.status(500).json({ error: 'Failed to extract video details: ' + err.message });
   }
+});
+
+// Image Proxy Route to bypass CORS/CORP issues (e.g., Instagram thumbnails)
+app.get('/api/proxy-image', (req, res) => {
+  const imageUrl = req.query.url;
+  if (!imageUrl) return res.status(400).send('URL required');
+
+  const client = imageUrl.startsWith('https') ? https : http;
+  
+  client.get(imageUrl, {
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+    }
+  }, (proxyRes) => {
+    if (proxyRes.statusCode >= 300 && proxyRes.statusCode < 400 && proxyRes.headers.location) {
+      return res.redirect(`/api/proxy-image?url=${encodeURIComponent(proxyRes.headers.location)}`);
+    }
+    
+    const headers = {};
+    if (proxyRes.headers['content-type']) headers['Content-Type'] = proxyRes.headers['content-type'];
+    if (proxyRes.headers['content-length']) headers['Content-Length'] = proxyRes.headers['content-length'];
+    headers['Cache-Control'] = 'public, max-age=86400';
+    
+    res.writeHead(proxyRes.statusCode || 200, headers);
+    proxyRes.pipe(res, { end: true });
+  }).on('error', (err) => {
+    console.error('[Proxy] Image proxy failed:', err.message);
+    res.redirect('https://images.unsplash.com/photo-1611162617213-7d7a39e9b1d7?w=600&auto=format&fit=crop');
+  });
 });
 
 // Server-Sent Events (SSE) Endpoint for Progress Updates
