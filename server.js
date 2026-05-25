@@ -126,17 +126,54 @@ app.get('/api/debug', async (req, res) => {
   let systemYtdlpVersion = 'unknown';
   try { ytdlpVersion = execSync(`"${process.env.YOUTUBE_DL_PATH || 'yt-dlp'}" --version 2>&1`).toString().trim(); } catch (e) { ytdlpVersion = e.message; }
   try { systemYtdlpVersion = execSync('yt-dlp --version 2>&1').toString().trim(); } catch (e) { systemYtdlpVersion = 'not found in PATH'; }
+
+  // Read first meaningful (non-comment) cookie line from IG file for preview
+  let igCookiePreview = 'N/A';
+  if (fs.existsSync(IG_COOKIES_FILE)) {
+    const lines = fs.readFileSync(IG_COOKIES_FILE, 'utf8').split('\n');
+    const firstCookie = lines.find(l => l.trim() && !l.startsWith('#'));
+    if (firstCookie) {
+      const parts = firstCookie.split('\t');
+      // Show domain + cookie name only — never expose cookie value
+      igCookiePreview = `domain=${parts[0]}, name=${parts[5] || '?'}`;
+    }
+  }
+
+  // Same for YouTube cookies
+  let ytCookiePreview = 'N/A';
+  if (fs.existsSync(COOKIES_FILE)) {
+    const lines = fs.readFileSync(COOKIES_FILE, 'utf8').split('\n');
+    const firstCookie = lines.find(l => l.trim() && !l.startsWith('#'));
+    if (firstCookie) {
+      const parts = firstCookie.split('\t');
+      ytCookiePreview = `domain=${parts[0]}, name=${parts[5] || '?'}`;
+    }
+  }
+
   res.json({
+    // ---- yt-dlp binary ----
     YOUTUBE_DL_PATH: process.env.YOUTUBE_DL_PATH || '(not set)',
-    cookies_file_exists: fs.existsSync(COOKIES_FILE),
-    cookies_file_size: fs.existsSync(COOKIES_FILE) ? fs.statSync(COOKIES_FILE).size + ' bytes' : '0',
-    COOKIES_ENV_SET: !!(process.env.COOKIES_CONTENT || process.env.YOUTUBE_COOKIES),
     bundled_ytdlp_version: ytdlpVersion,
     system_ytdlp_version: systemYtdlpVersion,
+
+    // ---- YouTube cookies ----
+    youtube_cookies_env_set: !!(process.env.COOKIES_CONTENT || process.env.YOUTUBE_COOKIES),
+    youtube_cookies_file_exists: fs.existsSync(COOKIES_FILE),
+    youtube_cookies_file_size: fs.existsSync(COOKIES_FILE) ? fs.statSync(COOKIES_FILE).size + ' bytes' : '0 bytes',
+    youtube_cookies_preview: ytCookiePreview,
+
+    // ---- Instagram cookies ----
+    instagram_cookies_env_set: !!process.env.INSTAGRAM_COOKIES,
+    instagram_cookies_file_exists: fs.existsSync(IG_COOKIES_FILE),
+    instagram_cookies_file_size: fs.existsSync(IG_COOKIES_FILE) ? fs.statSync(IG_COOKIES_FILE).size + ' bytes' : '0 bytes',
+    instagram_cookies_preview: igCookiePreview,
+
+    // ---- runtime ----
     node_version: process.version,
     platform: process.platform,
   });
 });
+
 
 // Check all files in downloads folder
 app.get('/api/downloads/status', (req, res) => {
