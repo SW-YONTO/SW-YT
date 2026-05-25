@@ -351,13 +351,22 @@ document.addEventListener('DOMContentLoaded', () => {
         activeDownloads[data.downloadId] = data.job;
         updateDownloadCard(data.downloadId, data.job);
 
-        // Only trigger browser download on the tab that OWNS this job
-        // This prevents all open tabs/devices from downloading the same file
+        // Only trigger browser download on the tab that OWNS this job.
+        // CASE 1: ownerClientId is set (new code) → strict match, only owner device downloads
+        // CASE 2: ownerClientId is null (old cached JS sent null) → first client to see it downloads
         if (data.job.status === 'completed' && data.job.filename) {
-          const isOwner = data.job.ownerClientId && data.job.ownerClientId === myClientId;
+          const jobOwner = data.job.ownerClientId;
+          const isOwner = jobOwner
+            ? jobOwner === myClientId          // new code: must be the owner
+            : !triggeredDownloads.has(data.downloadId); // old code fallback: first-come-first-served
+
+          console.log(`[Download] Job ${data.downloadId} completed.`,
+            `jobOwner=${jobOwner}, myClientId=${myClientId}, isOwner=${isOwner}`);
+
           if (isOwner && !triggeredDownloads.has(data.downloadId)) {
             triggeredDownloads.add(data.downloadId);
             triggerBrowserDownload(data.job.filename);
+          }
           }
         }
       }
