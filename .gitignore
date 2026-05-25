@@ -1,56 +1,8 @@
 node_modules/
 downloads/
 .env
+# Auto-generated cookie files (written by server.js from env vars) - do NOT commit
 cookies.txt
-*_cookies.txt
-
-
-
-test 1 : single yt video 
-link https://youtu.be/j3ExODI3LU8?si=vqF5FhUVZTlQl65q
-status pass
-test 2 : yt playlist 
-link : https://www.youtube.com/playlist?list=PLV2tWeQnHrKaMiVnH510tGaxGYuDi5GTy
-status : fully pass 
-
-test 3 :  singel insta reel
-
-link : https://www.instagram.com/reel/DYUVW1TzzNl/?utm_source=ig_web_copy_link&igsh=NTc4MTIwNjQ2YQ==
-status: fecth the data but dowload faidl and error show :
-clinetERORR NONE
-SERVERERROR: 
-> 18.yt-video-downloader@1.0.0 start
- SW-YTify Downloader Server successfully booted
-> node server.js
- Running on: http://localhost:8080
-[Info] Fetching info for: https://www.instagram.com/reel/DYUVW1TzzNl/?utm_source=ig_web_copy_link&igsh=NTc4MTIwNjQ2YQ==
-[Info] Cookies file present: true
-[Info] Using binary: /usr/local/bin/yt-dlp
-[DOWNLOAD ERROR] Download Job Failed! (ID: 1779699211555_4a9gf, Title: Video by aman_yadav1526)
-message: The command spawned as:
-  `/usr/local/bin/yt-dlp https://www.instagram.com/reel/DYUVW1TzzNl/?utm_source=ig_web_copy_link&igsh=NTc4MTIwNjQ2YQ== --output downloads/%(title)s.%(ext)s --no-warnings --ffmpeg-location node_modules/ffmpeg-static/ffmpeg --js-runtimes node --cookies /app/cookies.txt --format bestvideo+bestaudio/best`
-exited with:
-  `{ signal: 'null', code: 1 }` 
-with the following trace:
-
-WHOW THIS POSSIBLE I CREATE A NEW COOKIE FILE I LOGOUT AND RELOGIN AND CREATE A NEW COOKIE FOR THIS INSTA 
-SO MAYBE WE ARE FREACTHING THE WRONG FOR INSTA READ DOC FOR YTDLP INSTA DWONLOADING 
-
-
-test4 : insta post which containe multi image 
-link : https://www.instagram.com/p/DYcx30WE7c1/?utm_source=ig_web_copy_link&igsh=NTc4MTIwNjQ2YQ==
-main.js:109 
- GET https://www.sw-yt.tech/api/info?url=https%3A%2F%2Fwww.instagram.com%2Fp%2FDYcx30WE7c1%2F%3Futm_source%3Dig_web_copy_link%26igsh%3DNTc4MTIwNjQ2YQ%3D%3D 500 (Internal Server Error)
-main.js:118
- Extraction Error: Instagram is temporarily blocking this server. Please try again in a few minutes.
-main.js:109 
- GET https://www.sw-yt.tech/api/info?url=https%3A%2F%2Fwww.instagram.com%2Fp%2FDYcx30WE7c1%2F%3Futm_source%3Dig_web_copy_link%26igsh%3DNTc4MTIwNjQ2YQ%3D 500 (Internal Server Error)
-main.js:118
- Extraction Error: Instagram is temporarily blocking this server. Please try again in a few minutes.
-test 5 : singel insta post 
-link: https://www.instagram.com/p/DYtE2ZhztN4/?utm_source=ig_web_copy_link&igsh=NTc4MTIwNjQ2YQ==
-error on clinet : Extraction Error: Cannot read properties of null (reading 'classList')
-error on sever : [Info] Fetching info for: https://www.instagram.com/p/DYtE2ZhztN4/?utm_source=ig_web_copy_link&igsh=NTc4MTIwNjQ2YQ==
-[Info] Cookies file present: true
-[Info] Using binary: /usr/local/bin/yt-dlp
-we have some progress but now fully complete 
+instagram_cookies.txt
+# Source cookie files for local development ARE tracked
+# (instagram.com_cookies.txt and youtube.com_cookies.txt should be in git)

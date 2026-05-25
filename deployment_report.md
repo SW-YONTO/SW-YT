@@ -49,3 +49,31 @@ We added the **`jsRuntimes: 'node'`** flag to our configuration.
 This forces `yt-dlp` to execute the `--js-runtimes node` command-line argument. This simple instruction told `yt-dlp`: *"Hey, use the Node.js engine that's already running this server to solve YouTube's mathematical cipher."*
 
 Once `yt-dlp` used Node to solve the JS challenge, YouTube verified the request, unlocked the 429 block, and allowed us to extract the full `mp4` and `mp3` formats!
+
+---
+
+### Issue 4: Instagram 401 Unauthorized (The Separate Cookie Problem)
+**The Problem:**
+Instagram downloads were failing with a `401 Unauthorized` error even though cookies were present. The root cause was **two compounding bugs**:
+
+1. **Wrong cookies being sent:** The server was passing the YouTube `cookies.txt` to `yt-dlp` for Instagram requests. Instagram requires its **own session cookies** (`sessionid`, `csrftoken`, `ds_user_id`, `rur`) — YouTube cookies are completely useless for Instagram.
+
+2. **The cookie file was gitignored:** The `.gitignore` had a wildcard `*_cookies.txt` rule which blocked `instagram.com_cookies.txt` from ever reaching Railway via GitHub. So the production server had no Instagram cookies at all.
+
+3. **Wrong user-agent:** Instagram's API is very strict. Requests without a proper mobile browser user-agent (or with a bot-like `python-requests` UA) are immediately rejected with 401.
+
+4. **Rate limiting (401/429 from rapid requests):** Instagram temporarily blocks IPs that send too many requests in quick succession, returning 401/403 even with valid cookies.
+
+**The Solution:**
+We implemented a complete Instagram authentication pipeline:
+
+1. **Separate cookie file and env var:** Added a new `INSTAGRAM_COOKIES` environment variable on Railway. `server.js` now writes this to `instagram_cookies.txt` separately from the YouTube `cookies.txt`.
+
+2. **Fixed gitignore:** Changed `*_cookies.txt` (wildcard) to only ignore the auto-generated files (`cookies.txt` and `instagram_cookies.txt`). The source files `instagram.com_cookies.txt` and `youtube.com_cookies.txt` are now tracked in git for local development reference.
+
+3. **Mobile user-agent injection:** Added `--add-header` flags to pass a valid iPhone user-agent and `Accept-Language` header to every Instagram request. This makes the server look like a real mobile browser to Instagram.
+
+4. **Request throttling:** Added `--sleep-requests 1` (info) and `--sleep-requests 2` (download) flags. This adds a small delay between requests to Instagram, reducing the chance of rate-limit 401/429 errors.
+
+5. **Correct format for Instagram:** Instagram serves pre-merged single video streams — you can't request `bestvideo+bestaudio` (that's a YouTube-specific feature). The format is always set to `best` for Instagram URLs.
+

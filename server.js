@@ -49,7 +49,7 @@ setInterval(() => {
   }
 }, 5 * 60 * 1000); // 5 minutes interval
 
-// Write cookies from environment variable to a file (for production bot bypass)
+// Write YouTube cookies from environment variable to a file (for production bot bypass)
 const COOKIES_FILE = path.join(__dirname, 'cookies.txt');
 const envCookies = process.env.COOKIES_CONTENT || process.env.YOUTUBE_COOKIES;
 
@@ -57,16 +57,37 @@ if (envCookies) {
   // Railway stores multi-line env vars with literal \n — convert back to real newlines
   const cookiesContent = envCookies.replace(/\\n/g, '\n');
   fs.writeFileSync(COOKIES_FILE, cookiesContent, 'utf8');
-  console.log('[Cookies] Cookies loaded from environment variable.');
+  console.log('[Cookies] YouTube cookies loaded from environment variable.');
   console.log('[Cookies] File size:', fs.statSync(COOKIES_FILE).size, 'bytes');
   console.log('[Cookies] First line:', cookiesContent.split('\n')[0]);
 } else if (fs.existsSync(COOKIES_FILE)) {
   console.log('[Cookies] Local cookies.txt found. Using local file.');
 } else {
-  console.log('[Cookies] No cookies found in environment or local cookies.txt. Running without cookies.')
+  console.log('[Cookies] No YouTube cookies found in environment or local cookies.txt. Running without cookies.')
 }
+
+// Write Instagram cookies from environment variable to a separate file
+// On Railway: set INSTAGRAM_COOKIES env var with the contents of instagram.com_cookies.txt
+const IG_COOKIES_FILE = path.join(__dirname, 'instagram_cookies.txt');
+const envIgCookies = process.env.INSTAGRAM_COOKIES;
+
+if (envIgCookies) {
+  // Railway stores multi-line env vars with literal \n — convert back to real newlines
+  const igCookiesContent = envIgCookies.replace(/\\n/g, '\n');
+  fs.writeFileSync(IG_COOKIES_FILE, igCookiesContent, 'utf8');
+  console.log('[IG Cookies] Instagram cookies loaded from environment variable.');
+  console.log('[IG Cookies] File size:', fs.statSync(IG_COOKIES_FILE).size, 'bytes');
+} else if (fs.existsSync(path.join(__dirname, 'instagram.com_cookies.txt'))) {
+  // Local dev: use the instagram.com_cookies.txt file directly
+  fs.copyFileSync(path.join(__dirname, 'instagram.com_cookies.txt'), IG_COOKIES_FILE);
+  console.log('[IG Cookies] Local instagram.com_cookies.txt found. Copied to instagram_cookies.txt.');
+} else {
+  console.log('[IG Cookies] No Instagram cookies found. Instagram downloads may fail with 401.')
+}
+
 console.log('[Config] YOUTUBE_DL_PATH =', process.env.YOUTUBE_DL_PATH || '(not set - using bundled)');
-console.log('[Config] Cookies file exists:', fs.existsSync(COOKIES_FILE));
+console.log('[Config] YT Cookies file exists:', fs.existsSync(COOKIES_FILE));
+console.log('[Config] IG Cookies file exists:', fs.existsSync(IG_COOKIES_FILE));
 console.log('[Config] NODE_ENV =', process.env.NODE_ENV || 'not set');
 
 // Express configs
@@ -288,6 +309,7 @@ app.get('/api/info', async (req, res) => {
         if (isInstaPost) {
           try {
             console.log('[Info] Trying yt-dlp fallback for Instagram post images...');
+            const igCookiesExist = fs.existsSync(IG_COOKIES_FILE);
             const igOutput = await youtubeDl(url, {
               dumpSingleJson: true,
               noWarnings: true,
@@ -295,7 +317,11 @@ app.get('/api/info', async (req, res) => {
               skipDownload: true,
               noCheckFormats: true,
               jsRuntimes: 'node',
-              ...(cookiesExist ? { cookies: COOKIES_FILE } : {})
+              addHeader: [
+                'User-Agent:Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+                'Accept-Language:en-US,en;q=0.9'
+              ],
+              ...(igCookiesExist ? { cookies: IG_COOKIES_FILE } : {})
             });
             
             // yt-dlp returns image URLs in the thumbnails array for image posts
@@ -334,7 +360,8 @@ app.get('/api/info', async (req, res) => {
     }
     
     console.log(`[Info] Using binary: ${process.env.YOUTUBE_DL_PATH || 'bundled'}`);
-    const output = await youtubeDl(url, {
+    const igCookiesExist = fs.existsSync(IG_COOKIES_FILE);
+    const infoOptions = {
       dumpSingleJson: true,
       noWarnings: true,
       noCheckCertificates: true,
@@ -342,8 +369,23 @@ app.get('/api/info', async (req, res) => {
       noCheckFormats: true,
       flatPlaylist: true,
       jsRuntimes: 'node',
-      ...(cookiesExist ? { cookies: COOKIES_FILE } : {})
-    });
+    };
+
+    if (isInstagram) {
+      // Instagram: use IG-specific cookies and mobile user-agent to avoid 401
+      if (igCookiesExist) infoOptions.cookies = IG_COOKIES_FILE;
+      infoOptions.addHeader = [
+        'User-Agent:Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+        'Accept-Language:en-US,en;q=0.9'
+      ];
+      // Avoid hammering Instagram with rapid requests (prevents 401/429)
+      infoOptions.sleepRequests = 1;
+    } else {
+      // YouTube and others: use YouTube cookies
+      if (cookiesExist) infoOptions.cookies = COOKIES_FILE;
+    }
+
+    const output = await youtubeDl(url, infoOptions);
 
     if (output._type === 'playlist' || output.entries) {
       return res.json({
@@ -528,13 +570,30 @@ app.post('/api/download/server', (req, res) => {
 
   // Self-healing download function
   const runDownload = (isRetry = false) => {
+    const isInstagramUrl = url.includes('instagram.com');
+    const igCookiesExist = fs.existsSync(IG_COOKIES_FILE);
+
     const options = {
       output: 'downloads/%(title)s.%(ext)s',
       noWarnings: true,
       ffmpegLocation: relativeFfmpegPath,
       jsRuntimes: 'node',
-      ...(fs.existsSync(COOKIES_FILE) ? { cookies: COOKIES_FILE } : {})
     };
+
+    if (isInstagramUrl) {
+      // Instagram: use IG-specific cookies and mobile user-agent to bypass 401
+      if (igCookiesExist) options.cookies = IG_COOKIES_FILE;
+      options.addHeader = [
+        'User-Agent:Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+        'Accept-Language:en-US,en;q=0.9'
+      ];
+      // Throttle requests to Instagram to avoid 401/429 bans
+      options.sleepRequests = 2;
+      options.noCheckCertificates = true;
+    } else {
+      // YouTube and others: use YouTube cookies
+      if (fs.existsSync(COOKIES_FILE)) options.cookies = COOKIES_FILE;
+    }
 
     if (format === 'mp3') {
       if (isRetry) {
@@ -548,7 +607,7 @@ app.post('/api/download/server', (req, res) => {
       }
     } else if (format === '720p') {
       options.format = 'best[height<=720]/best';
-    } else if (url.includes('instagram.com')) {
+    } else if (isInstagramUrl) {
       // Instagram serves single combined streams — never use bestvideo+bestaudio
       options.format = 'best';
     } else {
