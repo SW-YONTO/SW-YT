@@ -17,24 +17,36 @@ test 3 :  singel insta reel
 
 link : https://www.instagram.com/reel/DYUVW1TzzNl/?utm_source=ig_web_copy_link&igsh=NTc4MTIwNjQ2YQ==
 status: fecth the data but dowload faidl and error show :
-clinet : main.js:109  GET https://www.sw-yt.tech/api/info?url=https%3A%2F%2Fwww.instagram.com%2Freel%2FDYUVW1TzzNl%2F%3Futm_source%3Dig_web_copy_link%26igsh%3DNTc4MTIwNjQ2YQ%3D%3D 500 (Internal Server Error)
-(anonymous) @ main.js:109
-main.js:118 Extraction Error: Failed to extract video details: ERROR: [Instagram] DYUVW1TzzNl: Requested content is not available, rate-limit reached or login required. Use --cookies-from-browser or --cookies for the authentication. See  https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp  for how to manually pass cookies
-
+clinetERORR NONE
+SERVERERROR: 
+> 18.yt-video-downloader@1.0.0 start
+ SW-YTify Downloader Server successfully booted
+> node server.js
+ Running on: http://localhost:8080
+[Info] Fetching info for: https://www.instagram.com/reel/DYUVW1TzzNl/?utm_source=ig_web_copy_link&igsh=NTc4MTIwNjQ2YQ==
 [Info] Cookies file present: true
 [Info] Using binary: /usr/local/bin/yt-dlp
-[Info] Error fetching video info: ERROR: [Instagram] DYUVW1TzzNl: Requested content is not available, rate-limit reached or login required. Use --cookies-from-browser or --cookies for the authentication. See  https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp  for how to manually pass cookies
-[Info] Fetching info for: https://www.instagram.com/reel/DYUVW1TzzNl/?utm_source=ig_web_copy_link&igsh=NTc4MTIwNjQ2YQ==
-[Info] IG Scraper early fetch failed: Failed instagram request: Request failed with status code 401
-[Info] Using binary: /usr/local/bin/yt-dlp
-[Info] Error fetching video info: ERROR: [Instagram] DYUVW1TzzNl: Requested content is not available, rate-limit reached or login required. Use --cookies-from-browser or --cookies for the authentication. See  https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp  for how to manually pass cookies
+[DOWNLOAD ERROR] Download Job Failed! (ID: 1779699211555_4a9gf, Title: Video by aman_yadav1526)
+message: The command spawned as:
+  `/usr/local/bin/yt-dlp https://www.instagram.com/reel/DYUVW1TzzNl/?utm_source=ig_web_copy_link&igsh=NTc4MTIwNjQ2YQ== --output downloads/%(title)s.%(ext)s --no-warnings --ffmpeg-location node_modules/ffmpeg-static/ffmpeg --js-runtimes node --cookies /app/cookies.txt --format bestvideo+bestaudio/best`
+exited with:
+  `{ signal: 'null', code: 1 }` 
+with the following trace:
+
+WHOW THIS POSSIBLE I CREATE A NEW COOKIE FILE I LOGOUT AND RELOGIN AND CREATE A NEW COOKIE FOR THIS INSTA 
+SO MAYBE WE ARE FREACTHING THE WRONG FOR INSTA READ DOC FOR YTDLP INSTA DWONLOADING 
 
 
 test4 : insta post which containe multi image 
 link : https://www.instagram.com/p/DYcx30WE7c1/?utm_source=ig_web_copy_link&igsh=NTc4MTIwNjQ2YQ==
-status pass but this is an image so why are you shwoing download mp4 or mp3 i told you to handle it vai image 
-also not all the image showing only showing first image like single image link so fix issue now 
-
+main.js:109 
+ GET https://www.sw-yt.tech/api/info?url=https%3A%2F%2Fwww.instagram.com%2Fp%2FDYcx30WE7c1%2F%3Futm_source%3Dig_web_copy_link%26igsh%3DNTc4MTIwNjQ2YQ%3D%3D 500 (Internal Server Error)
+main.js:118
+ Extraction Error: Instagram is temporarily blocking this server. Please try again in a few minutes.
+main.js:109 
+ GET https://www.sw-yt.tech/api/info?url=https%3A%2F%2Fwww.instagram.com%2Fp%2FDYcx30WE7c1%2F%3Futm_source%3Dig_web_copy_link%26igsh%3DNTc4MTIwNjQ2YQ%3D 500 (Internal Server Error)
+main.js:118
+ Extraction Error: Instagram is temporarily blocking this server. Please try again in a few minutes.
 test 5 : singel insta post 
 link: https://www.instagram.com/p/DYtE2ZhztN4/?utm_source=ig_web_copy_link&igsh=NTc4MTIwNjQ2YQ==
 error on clinet : Extraction Error: Cannot read properties of null (reading 'classList')
