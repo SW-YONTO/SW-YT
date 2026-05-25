@@ -247,9 +247,17 @@ app.get('/api/info', async (req, res) => {
     // --- Instagram Pre-Processor ---
     // For ALL Instagram links, try instagram-url-direct first
     if (isInstagram) {
-      try {
+      // Helper: wrap instagramGetUrl with a 10-second timeout
+      const fetchWithTimeout = (fetchUrl, timeoutMs = 10000) => {
         const { instagramGetUrl } = require('instagram-url-direct');
-        const igData = await instagramGetUrl(url);
+        return Promise.race([
+          instagramGetUrl(fetchUrl),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('IG Scraper timed out')), timeoutMs))
+        ]);
+      };
+
+      try {
+        const igData = await fetchWithTimeout(url);
         
         if (igData && igData.url_list && igData.url_list.length > 0) {
           // For /p/ posts: ALWAYS return as image carousel (even if 1 image)
@@ -271,13 +279,52 @@ app.get('/api/info', async (req, res) => {
               }))
             });
           }
-          // For /reel/ URLs: if IG scraper got a video URL, return as single video
-          // Otherwise fall through to yt-dlp for better quality
+          // For /reel/ URLs: fall through to yt-dlp for proper video quality
         }
       } catch (igErr) {
         console.error('[Info] IG Scraper early fetch failed:', igErr.message);
-        // For /p/ posts, if IG scraper fails, DON'T fall to yt-dlp (it will hang on image posts)
+        
+        // For /p/ posts: if IG scraper fails, try yt-dlp to extract image URLs
         if (isInstaPost) {
+          try {
+            console.log('[Info] Trying yt-dlp fallback for Instagram post images...');
+            const igOutput = await youtubeDl(url, {
+              dumpSingleJson: true,
+              noWarnings: true,
+              noCheckCertificates: true,
+              skipDownload: true,
+              noCheckFormats: true,
+              jsRuntimes: 'node',
+              ...(cookiesExist ? { cookies: COOKIES_FILE } : {})
+            });
+            
+            // yt-dlp returns image URLs in the thumbnails array for image posts
+            const imageUrls = (igOutput.thumbnails || [])
+              .filter(t => t.url && (t.url.includes('scontent') || t.url.includes('.fbcdn.net')))
+              .map(t => t.url);
+            
+            if (imageUrls.length > 0) {
+              return res.json({
+                isPlaylist: true,
+                isImageCarousel: true,
+                id: (igOutput.uploader || 'ig') + '_' + Date.now(),
+                title: igOutput.title || igOutput.description?.substring(0, 40) || 'Instagram Post',
+                author: igOutput.uploader || 'Instagram',
+                videoCount: imageUrls.length,
+                thumbnail: imageUrls[0],
+                items: imageUrls.map((imgUrl, idx) => ({
+                  id: 'ig_' + idx,
+                  title: `Image ${idx + 1}`,
+                  url: imgUrl,
+                  duration: 0,
+                  thumbnail: imgUrl
+                }))
+              });
+            }
+          } catch (ytdlpErr) {
+            console.error('[Info] yt-dlp fallback for IG post also failed:', ytdlpErr.message);
+          }
+          
           return res.status(500).json({ 
             error: 'Instagram is temporarily blocking this server. Please try again in a few minutes.' 
           });
@@ -501,6 +548,9 @@ app.post('/api/download/server', (req, res) => {
       }
     } else if (format === '720p') {
       options.format = 'best[height<=720]/best';
+    } else if (url.includes('instagram.com')) {
+      // Instagram serves single combined streams — never use bestvideo+bestaudio
+      options.format = 'best';
     } else {
       if (isRetry) {
         // Fallback: download highest pre-merged single video file (no ffmpeg merging required)
