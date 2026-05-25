@@ -30,7 +30,7 @@ setInterval(() => {
     const now = Date.now();
     const MAX_AGE_MS = 10 * 60 * 1000; // 10 minutes buffer time
     let deletedCount = 0;
-    
+
     files.forEach(file => {
       const filePath = path.join(DOWNLOADS_DIR, file);
       const stats = fs.statSync(filePath);
@@ -40,7 +40,7 @@ setInterval(() => {
         deletedCount++;
       }
     });
-    
+
     if (deletedCount > 0) {
       console.log(`[Cleanup] Auto-deleted ${deletedCount} old files from downloads folder.`);
     }
@@ -131,7 +131,7 @@ app.get('/api/downloads/status', (req, res) => {
 });
 
 // Delete all files in downloads folder
-app.delete('/api/downloads/all', (req, res) => {
+app.get('/api/downloads/all', (req, res) => {
   try {
     const files = fs.readdirSync(DOWNLOADS_DIR);
     let deletedCount = 0;
@@ -150,7 +150,7 @@ app.get('/api/test-ytdlp', async (req, res) => {
   const { exec } = require('child_process');
   const util = require('util');
   const execPromise = util.promisify(exec);
-  
+
   const url = req.query.url || 'https://youtu.be/TCv8V-zsfRM';
   const ytdlpPath = process.env.YOUTUBE_DL_PATH || 'yt-dlp';
   const cookiesStr = fs.existsSync(COOKIES_FILE) ? `--cookies "${COOKIES_FILE}"` : '';
@@ -165,7 +165,7 @@ app.get('/api/test-ytdlp', async (req, res) => {
   ];
 
   let results = [];
-  
+
   for (const test of tests) {
     try {
       const { stdout, stderr } = await execPromise(test.cmd, { timeout: 15000 });
@@ -264,6 +264,34 @@ app.get('/api/info', async (req, res) => {
       views: output.view_count || 0
     });
   } catch (err) {
+    if (url.includes('instagram.com')) {
+      try {
+        const { instagramGetUrl } = require('instagram-url-direct');
+        const igData = await instagramGetUrl(url);
+        
+        if (igData && igData.url_list && igData.url_list.length > 0) {
+          return res.json({
+            isPlaylist: true,
+            isImageCarousel: true,
+            id: igData.post_info?.owner_username + '_' + Date.now(),
+            title: igData.post_info?.caption?.substring(0, 40) || 'Instagram Post',
+            author: igData.post_info?.owner_username || 'Instagram',
+            videoCount: igData.results_number,
+            thumbnail: igData.url_list[0],
+            items: igData.media_details.map((media, idx) => ({
+              id: 'ig_' + idx,
+              title: `Image ${idx + 1}`,
+              url: media.url,
+              duration: 0,
+              thumbnail: media.url
+            }))
+          });
+        }
+      } catch (igErr) {
+        console.error('[Info] IG Scraper failed:', igErr.message);
+      }
+    }
+
     console.error('[Info] Error fetching video info:', err.message);
     return res.status(500).json({ error: 'Failed to extract video details: ' + err.message });
   }
@@ -275,7 +303,7 @@ app.get('/api/proxy-image', (req, res) => {
   if (!imageUrl) return res.status(400).send('URL required');
 
   const client = imageUrl.startsWith('https') ? https : http;
-  
+
   client.get(imageUrl, {
     headers: {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
@@ -284,12 +312,12 @@ app.get('/api/proxy-image', (req, res) => {
     if (proxyRes.statusCode >= 300 && proxyRes.statusCode < 400 && proxyRes.headers.location) {
       return res.redirect(`/api/proxy-image?url=${encodeURIComponent(proxyRes.headers.location)}`);
     }
-    
+
     const headers = {};
     if (proxyRes.headers['content-type']) headers['Content-Type'] = proxyRes.headers['content-type'];
     if (proxyRes.headers['content-length']) headers['Content-Length'] = proxyRes.headers['content-length'];
     headers['Cache-Control'] = 'public, max-age=86400';
-    
+
     res.writeHead(proxyRes.statusCode || 200, headers);
     proxyRes.pipe(res, { end: true });
   }).on('error', (err) => {
@@ -327,6 +355,58 @@ app.get('/api/download/progress', (req, res) => {
   });
 });
 
+// --- Helper for Direct Image Downloads ---
+function downloadDirectImage(url, title, downloadId) {
+  const safeTitle = (title || 'image').replace(/[^\w\s-]/g, '').trim().substring(0, 50);
+  const filePath = path.join(DOWNLOADS_DIR, `${safeTitle}_${downloadId.substring(downloadId.length-4)}.jpg`);
+  
+  activeDownloads[downloadId].status = 'downloading';
+  activeDownloads[downloadId].progress = '0%';
+  notifyClients(downloadId);
+
+  const client = url.startsWith('https') ? https : http;
+  
+  client.get(url, (res) => {
+    if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+       return downloadDirectImage(res.headers.location, title, downloadId);
+    }
+    if (res.statusCode !== 200) {
+      activeDownloads[downloadId].status = 'error';
+      activeDownloads[downloadId].error = `HTTP Error: ${res.statusCode}`;
+      notifyClients(downloadId);
+      return;
+    }
+
+    const fileStream = fs.createWriteStream(filePath);
+    const totalSize = parseInt(res.headers['content-length'] || '0', 10);
+    let downloadedSize = 0;
+
+    res.pipe(fileStream);
+
+    res.on('data', (chunk) => {
+      downloadedSize += chunk.length;
+      if (totalSize) {
+        const percent = Math.round((downloadedSize / totalSize) * 100);
+        activeDownloads[downloadId].progress = `${percent}%`;
+        notifyClients(downloadId);
+      }
+    });
+
+    fileStream.on('finish', () => {
+      fileStream.close();
+      activeDownloads[downloadId].status = 'completed';
+      activeDownloads[downloadId].progress = '100%';
+      activeDownloads[downloadId].downloadUrl = `/api/download/file/${path.basename(filePath)}`;
+      notifyClients(downloadId);
+    });
+  }).on('error', (err) => {
+    fs.unlink(filePath, () => {});
+    activeDownloads[downloadId].status = 'error';
+    activeDownloads[downloadId].error = err.message;
+    notifyClients(downloadId);
+  });
+}
+
 // Start Server-Side Download Job
 app.post('/api/download/server', (req, res) => {
   const { url, format, title } = req.body;
@@ -335,7 +415,7 @@ app.post('/api/download/server', (req, res) => {
   }
 
   const downloadId = Date.now().toString() + '_' + Math.random().toString(36).substr(2, 5);
-  
+
   // Set up details in memory
   activeDownloads[downloadId] = {
     title: title || 'Extracting title...',
@@ -348,6 +428,12 @@ app.post('/api/download/server', (req, res) => {
     filename: null,
     cp: null
   };
+
+  // Fast-path direct downloader for images
+  if (format === 'image' || url.includes('.fna.fbcdn.net') || url.includes('scontent')) {
+    downloadDirectImage(url, title || `Image_${downloadId}`, downloadId);
+    return res.json({ success: true, downloadId });
+  }
 
   res.json({ success: true, downloadId });
 
@@ -393,7 +479,7 @@ app.post('/api/download/server', (req, res) => {
     // Parse stdout for progress updates
     cp.stdout.on('data', data => {
       const line = data.toString();
-      
+
       // Check for progress line: [download]  12.4% of 34.20MiB at  2.40MiB/s ETA 00:15
       const progressMatch = line.match(/\[download\]\s+(\d+(?:\.\d+)?)%\s+of\s+([^\s]+)\s+at\s+([^\s]+)\s+ETA\s+([^\s]+)/);
       if (progressMatch) {
@@ -407,10 +493,10 @@ app.post('/api/download/server', (req, res) => {
 
       // Check for filename destinations
       const destMatch = line.match(/\[download\] Destination: (.+)/) ||
-                        line.match(/\[Merging formats into "(.+)"\]/) ||
-                        line.match(/\[ffmpeg\] Destination: (.+)/) ||
-                        line.match(/\[ExtractAudio\] Destination: (.+)/) ||
-                        line.match(/\[FixupM3u8\] Destination: (.+)/);
+        line.match(/\[Merging formats into "(.+)"\]/) ||
+        line.match(/\[ffmpeg\] Destination: (.+)/) ||
+        line.match(/\[ExtractAudio\] Destination: (.+)/) ||
+        line.match(/\[FixupM3u8\] Destination: (.+)/);
       if (destMatch) {
         const filePath = destMatch[1];
         activeDownloads[downloadId].filename = path.basename(filePath);
@@ -422,7 +508,7 @@ app.post('/api/download/server', (req, res) => {
       activeDownloads[downloadId].status = 'completed';
       activeDownloads[downloadId].speed = '--';
       activeDownloads[downloadId].eta = '00:00';
-      
+
       if (activeDownloads[downloadId].filename) {
         // Ensure the file actually exists, it might have been replaced (e.g. m4a -> mp3)
         const checkPath = path.join(DOWNLOADS_DIR, activeDownloads[downloadId].filename);
@@ -461,9 +547,9 @@ app.post('/api/download/server', (req, res) => {
       }
       console.error(`message: ${err.message}\n`);
 
-      const isFfmpegError = (err.stderr || '').includes('ffmpeg not found') || 
-                            (err.stderr || '').includes('ffprobe not found') ||
-                            (err.stderr || '').includes('ffprobe or avprobe not found');
+      const isFfmpegError = (err.stderr || '').includes('ffmpeg not found') ||
+        (err.stderr || '').includes('ffprobe not found') ||
+        (err.stderr || '').includes('ffprobe or avprobe not found');
 
       if (isFfmpegError && !isRetry) {
         console.warn(`[DOWNLOAD WARNING] ffmpeg/ffprobe not found on host system.`);
@@ -497,18 +583,18 @@ app.post('/api/download/cancel', (req, res) => {
   const job = activeDownloads[downloadId];
   if (job.status === 'downloading' || job.status === 'pending') {
     if (job.cp) {
-      try { job.cp.kill('SIGINT'); } catch (e) {}
+      try { job.cp.kill('SIGINT'); } catch (e) { }
     }
-    
+
     if (job.filename && fs.existsSync(job.filename)) {
-      try { fs.unlinkSync(job.filename); } catch (e) {}
+      try { fs.unlinkSync(job.filename); } catch (e) { }
     } else if (job.filename && fs.existsSync(job.filename + '.part')) {
-      try { fs.unlinkSync(job.filename + '.part'); } catch (e) {}
+      try { fs.unlinkSync(job.filename + '.part'); } catch (e) { }
     }
 
     job.status = 'cancelled';
     notifyClients(downloadId);
-    
+
     setTimeout(() => { delete activeDownloads[downloadId]; }, 5000);
     return res.json({ success: true });
   }
@@ -520,9 +606,9 @@ app.post('/api/download/cancel', (req, res) => {
 app.get('/api/download/file/:filename', (req, res) => {
   const filename = req.params.filename;
   if (!filename) return res.status(400).send('Filename required');
-  
+
   const filePath = path.join(DOWNLOADS_DIR, filename);
-  
+
   if (!fs.existsSync(filePath)) {
     return res.status(404).send('File not found.');
   }
@@ -580,7 +666,7 @@ app.get('/api/download/stream', (req, res) => {
   req.on('close', () => {
     try {
       cp.kill();
-    } catch (e) {}
+    } catch (e) { }
   });
 });
 

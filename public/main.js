@@ -134,6 +134,15 @@ document.addEventListener('DOMContentLoaded', () => {
       playlistTitle.textContent = data.title;
       playlistAuthor.textContent = data.author;
       playlistCount.textContent = data.videoCount;
+
+      const formatContainer = document.getElementById('playlist-format-options-container');
+      if (data.isImageCarousel) {
+        formatContainer.classList.add('hidden');
+        document.getElementById('select-all-videos').nextSibling.textContent = ' Select All Images';
+      } else {
+        formatContainer.classList.remove('hidden');
+        document.getElementById('select-all-videos').nextSibling.textContent = ' Select All Videos';
+      }
       
       // Clear and render items list
       playlistItemsList.innerHTML = '';
@@ -238,12 +247,16 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    const type = document.querySelector('input[name="playlist-type"]:checked').value;
     let format = 'best';
-    if (type === 'mp3') {
-      format = 'mp3';
+    if (currentMetadata.isImageCarousel) {
+      format = 'image';
     } else {
-      format = document.getElementById('playlist-video-quality').value;
+      const type = document.querySelector('input[name="playlist-type"]:checked').value;
+      if (type === 'mp3') {
+        format = 'mp3';
+      } else {
+        format = document.getElementById('playlist-video-quality').value;
+      }
     }
     
     // Start downloads sequentially/parallelly in background

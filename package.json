@@ -24,6 +24,7 @@
     "ejs": "^5.0.2",
     "express": "^5.2.1",
     "ffmpeg-static": "^5.3.0",
+    "instagram-url-direct": "^2.0.7",
     "youtube-dl-exec": "^3.1.7",
     "ytpl": "^2.3.0"
   }
