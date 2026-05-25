@@ -43,6 +43,27 @@ document.addEventListener('DOMContentLoaded', () => {
   let activeDownloads = {}; // Current ongoing downloads dict
   let myClientId = null; // Unique ID assigned by server to THIS browser tab via SSE
 
+  // Wait until the SSE connection has given us our clientId before sending downloads
+  // Prevents race condition where download fires before 'connected' event arrives
+  function waitForClientId(timeoutMs = 5000) {
+    return new Promise((resolve) => {
+      if (myClientId) return resolve(myClientId);
+      const start = Date.now();
+      const poll = setInterval(() => {
+        if (myClientId) {
+          clearInterval(poll);
+          resolve(myClientId);
+        } else if (Date.now() - start > timeoutMs) {
+          clearInterval(poll);
+          // Timed out — generate a fallback ID so the download still works
+          myClientId = 'fallback_' + Date.now().toString(36);
+          console.warn('[SSE] clientId not received in time, using fallback:', myClientId);
+          resolve(myClientId);
+        }
+      }, 50);
+    });
+  }
+
   // Helper formatting for seconds to MM:SS
   function formatSeconds(seconds) {
     if (!seconds) return '0:00';
@@ -220,6 +241,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const url = youtubeUrlInput.value.trim();
     
     try {
+      const clientId = await waitForClientId();
       const res = await fetch('/api/download/server', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -227,7 +249,7 @@ document.addEventListener('DOMContentLoaded', () => {
           url,
           format,
           title: currentMetadata.title,
-          ownerClientId: myClientId   // tag this job so only THIS tab triggers the browser download
+          ownerClientId: clientId   // tag this job so only THIS tab triggers the browser download
         })
       });
       const data = await res.json();
@@ -263,6 +285,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Start downloads with staggered delay to avoid YouTube rate-limiting
     const delay = (ms) => new Promise(r => setTimeout(r, ms));
+    const clientId = await waitForClientId(); // ensure we have our ID before looping
     for (let i = 0; i < checkedBoxes.length; i++) {
       const cb = checkedBoxes[i];
       const idx = parseInt(cb.getAttribute('data-index'));
@@ -276,7 +299,7 @@ document.addEventListener('DOMContentLoaded', () => {
             url: item.url,
             format,
             title: item.title,
-            ownerClientId: myClientId   // tag this job so only THIS tab triggers the browser download
+            ownerClientId: clientId   // tag this job so only THIS tab triggers the browser download
           })
         });
         // Wait 2 seconds between jobs to prevent rate-limiting (skip delay after last item)

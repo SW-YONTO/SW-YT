@@ -22,7 +22,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;600;800&display=swap" rel="stylesheet">
   <!-- Lucide Icons via CDN for modern clean SVG icons -->
   <script src="https://unpkg.com/lucide@latest"></script>
-  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/style.css?v=<%= buildVersion %>">
 </head>
 <body>
 
@@ -215,7 +215,7 @@
   </div>
 
   <!-- Client-side logic script -->
-  <script src="/main.js"></script>
+  <script src="/main.js?v=<%= buildVersion %>"></script>
   <script>
     // Initialize Lucide Icons
     lucide.createIcons();

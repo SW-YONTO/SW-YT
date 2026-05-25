@@ -93,9 +93,21 @@ console.log('[Config] NODE_ENV =', process.env.NODE_ENV || 'not set');
 // Express configs
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
-app.use(express.static(path.join(__dirname, 'public')));
+
+// Serve static files — add no-cache for JS/CSS so browsers always revalidate
+// This prevents stale main.js from running after a Railway redeploy
+app.use(express.static(path.join(__dirname, 'public'), {
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('.js') || filePath.endsWith('.css')) {
+      res.setHeader('Cache-Control', 'no-cache, must-revalidate');
+    }
+  }
+}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Build version = server start time (changes every Railway redeploy)
+const BUILD_VERSION = Date.now().toString(36);
 
 // Shared in-memory active downloads store
 const activeDownloads = {};
@@ -255,7 +267,7 @@ app.get('/api/test-ytdlp', async (req, res) => {
 
 // Home Dashboard Route
 app.get('/', (req, res) => {
-  res.render('index');
+  res.render('index', { buildVersion: BUILD_VERSION });
 });
 
 // Single Video or Playlist Metadata Extractor
