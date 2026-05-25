@@ -21,6 +21,32 @@ if (!fs.existsSync(DOWNLOADS_DIR)) {
   fs.mkdirSync(DOWNLOADS_DIR, { recursive: true });
 }
 
+// Background Cleanup Task: Runs every 5 minutes
+setInterval(() => {
+  try {
+    const files = fs.readdirSync(DOWNLOADS_DIR);
+    const now = Date.now();
+    const MAX_AGE_MS = 10 * 60 * 1000; // 10 minutes buffer time
+    let deletedCount = 0;
+    
+    files.forEach(file => {
+      const filePath = path.join(DOWNLOADS_DIR, file);
+      const stats = fs.statSync(filePath);
+      // If file is older than 10 minutes, delete it
+      if (now - stats.mtime.getTime() > MAX_AGE_MS) {
+        fs.unlinkSync(filePath);
+        deletedCount++;
+      }
+    });
+    
+    if (deletedCount > 0) {
+      console.log(`[Cleanup] Auto-deleted ${deletedCount} old files from downloads folder.`);
+    }
+  } catch (err) {
+    console.error('[Cleanup] Background cleanup task failed:', err.message);
+  }
+}, 5 * 60 * 1000); // 5 minutes interval
+
 // Write cookies from environment variable to a file (for production bot bypass)
 const COOKIES_FILE = path.join(__dirname, 'cookies.txt');
 const envCookies = process.env.COOKIES_CONTENT || process.env.YOUTUBE_COOKIES;
