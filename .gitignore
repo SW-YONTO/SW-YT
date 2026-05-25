@@ -2,3 +2,4 @@ node_modules/
 downloads/
 .env
 cookies.txt
+*_cookies.txt
