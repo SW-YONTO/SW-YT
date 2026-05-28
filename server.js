@@ -114,6 +114,16 @@ app.use(express.static(path.join(__dirname, 'public'), {
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// WWW to non-WWW Redirect Middleware (SEO-friendly canonical domains)
+app.use((req, res, next) => {
+  const host = req.headers.host;
+  if (host && host.startsWith('www.')) {
+    const newHost = host.slice(4); // remove 'www.' prefix
+    return res.redirect(301, `https://${newHost}${req.originalUrl}`);
+  }
+  next();
+});
+
 // Build version = server start time (changes every Railway redeploy)
 const BUILD_VERSION = Date.now().toString(36);
 
