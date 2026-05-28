@@ -9,6 +9,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const loadingSkeleton = document.getElementById('loading-skeleton');
   const videoCard = document.getElementById('video-card');
   const playlistCard = document.getElementById('playlist-card');
+  const errorCard = document.getElementById('error-card');
+  const errorMessage = document.getElementById('error-message');
 
   // Single Video Elements
   const videoThumb = document.getElementById('video-thumb');
@@ -77,6 +79,7 @@ document.addEventListener('DOMContentLoaded', () => {
     loadingSkeleton.classList.add('hidden');
     videoCard.classList.add('hidden');
     playlistCard.classList.add('hidden');
+    if (errorCard) errorCard.classList.add('hidden');
     const grid = document.querySelector('.content-grid');
     const col = document.querySelector('.result-column');
     if (grid) grid.classList.remove('has-result');
@@ -139,6 +142,14 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (err) {
       console.error('Extraction Error:', err.message);
       hideAllResultPanels();
+      
+      // Dynamic invalid link/extraction error indicator UI
+      if (grid) grid.classList.add('has-result');
+      if (col) col.classList.remove('hidden-column');
+      if (errorCard && errorMessage) {
+        errorMessage.textContent = err.message || 'Failed to extract URL details';
+        errorCard.classList.remove('hidden');
+      }
     } finally {
       searchBtn.disabled = false;
     }
@@ -249,6 +260,7 @@ document.addEventListener('DOMContentLoaded', () => {
           url,
           format,
           title: currentMetadata.title,
+          id: currentMetadata.id,
           ownerClientId: clientId   // tag this job so only THIS tab triggers the browser download
         })
       });
@@ -299,6 +311,7 @@ document.addEventListener('DOMContentLoaded', () => {
             url: item.url,
             format,
             title: item.title,
+            id: item.id,
             ownerClientId: clientId   // tag this job so only THIS tab triggers the browser download
           })
         });
@@ -366,7 +379,6 @@ document.addEventListener('DOMContentLoaded', () => {
           if (isOwner && !triggeredDownloads.has(data.downloadId)) {
             triggeredDownloads.add(data.downloadId);
             triggerBrowserDownload(data.job.filename);
-          }
           }
         }
       }
@@ -462,10 +474,27 @@ document.addEventListener('DOMContentLoaded', () => {
     if (speedSpan) speedSpan.textContent = job.speed || '';
     if (etaSpan) etaSpan.textContent = `ETA ${job.eta || ''}`;
 
-    // If card transition to completed, clear details after a delay
-    if (job.status === 'completed') {
+    // Remove cancel button when transition to completed, cancelled, or error
+    const cancelBtn = card.querySelector('.cancel-btn');
+    if (cancelBtn && (job.status === 'completed' || job.status === 'cancelled' || job.status === 'error')) {
+      cancelBtn.remove();
+    }
+
+    // Append error details if not already present
+    if (job.status === 'error') {
+      let errorMsgDiv = card.querySelector('.job-error-msg');
+      if (!errorMsgDiv) {
+        errorMsgDiv = document.createElement('div');
+        errorMsgDiv.className = 'job-error-msg';
+        card.appendChild(errorMsgDiv);
+      }
+      errorMsgDiv.textContent = `Error: ${job.error || 'Failed'}`;
+    }
+
+    // If card transition to completed or cancelled, clear details after a delay
+    if (job.status === 'completed' || job.status === 'cancelled') {
       setTimeout(() => {
-        // Gently fade out completed jobs after 5 seconds to keep the list clean
+        // Gently fade out completed/cancelled jobs after 5 seconds to keep the list clean
         card.style.opacity = '0';
         card.style.transition = 'all 1s';
         setTimeout(() => {

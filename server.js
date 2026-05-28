@@ -9,10 +9,14 @@ const ffmpegPath = require('ffmpeg-static');
 const relativeFfmpegPath = path.relative(process.cwd(), ffmpegPath);
 require('dotenv').config();
 
-// Use system yt-dlp binary if set (Railway production), otherwise use bundled
+// Use system yt-dlp binary if set (Railway production), otherwise use bundled.
+// On Windows, resolve the bundled binary to a relative path to avoid spaces-in-path shell command injection.
+const defaultBinaryPath = path.join(__dirname, 'node_modules', 'youtube-dl-exec', 'bin', process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp');
+const relativeDefaultPath = path.relative(process.cwd(), defaultBinaryPath);
+
 const youtubeDl = process.env.YOUTUBE_DL_PATH
   ? create(process.env.YOUTUBE_DL_PATH)
-  : require('youtube-dl-exec');
+  : create(relativeDefaultPath);
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -90,6 +94,10 @@ console.log('[Config] YT Cookies file exists:', fs.existsSync(COOKIES_FILE));
 console.log('[Config] IG Cookies file exists:', fs.existsSync(IG_COOKIES_FILE));
 console.log('[Config] NODE_ENV =', process.env.NODE_ENV || 'not set');
 
+// Safe relative paths for yt-dlp to avoid space-in-path errors on Windows
+const relativeCookiesPath = path.relative(process.cwd(), COOKIES_FILE);
+const relativeIgCookiesPath = path.relative(process.cwd(), IG_COOKIES_FILE);
+
 // Express configs
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
@@ -127,6 +135,25 @@ function notifyClients(downloadId) {
       console.error('SSE Write Error:', e);
     }
   });
+}
+
+// Helper to strip YouTube Mix playlist parameters from URLs to avoid hanging on playlist metadata fetches
+function cleanYoutubeUrl(urlStr) {
+  if (!urlStr) return urlStr;
+  try {
+    if (urlStr.includes('youtube.com') || urlStr.includes('youtu.be')) {
+      const parsedUrl = new URL(urlStr);
+      const listParam = parsedUrl.searchParams.get('list');
+      if (listParam && listParam.startsWith('RD')) {
+        parsedUrl.searchParams.delete('list');
+        parsedUrl.searchParams.delete('start_radio');
+        return parsedUrl.toString();
+      }
+    }
+  } catch (e) {
+    console.error('[URL Cleaner] Failed to clean URL:', e.message);
+  }
+  return urlStr;
 }
 
 // ----------------- ROUTES -----------------
@@ -223,7 +250,7 @@ app.get('/api/test-ytdlp', async (req, res) => {
 
   const url = req.query.url || 'https://youtu.be/TCv8V-zsfRM';
   const ytdlpPath = process.env.YOUTUBE_DL_PATH || 'yt-dlp';
-  const cookiesStr = fs.existsSync(COOKIES_FILE) ? `--cookies "${COOKIES_FILE}"` : '';
+  const cookiesStr = fs.existsSync(COOKIES_FILE) ? `--cookies "${relativeCookiesPath}"` : '';
 
   const tests = [
     { name: '5. No Cookies, Android Client', cmd: `"${ytdlpPath}" -j --skip-download --extractor-args "youtube:player_client=android" "${url}"` },
@@ -272,10 +299,13 @@ app.get('/', (req, res) => {
 
 // Single Video or Playlist Metadata Extractor
 app.get('/api/info', async (req, res) => {
-  const { url } = req.query;
+  let { url } = req.query;
   if (!url) {
     return res.status(400).json({ error: 'URL query parameter is required.' });
   }
+
+  // Clean YouTube Mix URLs to extract them as a single video instead of dynamic playlist
+  url = cleanYoutubeUrl(url);
 
   // Helper check for playlist ID / list parameter
   const hasPlaylist = url.includes('list=') || ytpl.validateID(url);
@@ -370,7 +400,7 @@ app.get('/api/info', async (req, res) => {
                 'User-Agent:Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
                 'Accept-Language:en-US,en;q=0.9'
               ],
-              ...(igCookiesExist ? { cookies: IG_COOKIES_FILE } : {})
+              ...(igCookiesExist ? { cookies: relativeIgCookiesPath } : {})
             });
             
             // yt-dlp returns image URLs in the thumbnails array for image posts
@@ -422,7 +452,7 @@ app.get('/api/info', async (req, res) => {
 
     if (isInstagram) {
       // Instagram: use IG-specific cookies and mobile user-agent to avoid 401
-      if (igCookiesExist) infoOptions.cookies = IG_COOKIES_FILE;
+      if (igCookiesExist) infoOptions.cookies = relativeIgCookiesPath;
       infoOptions.addHeader = [
         'User-Agent:Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
         'Accept-Language:en-US,en;q=0.9'
@@ -431,7 +461,7 @@ app.get('/api/info', async (req, res) => {
       infoOptions.sleepRequests = 1;
     } else {
       // YouTube and others: use YouTube cookies
-      if (cookiesExist) infoOptions.cookies = COOKIES_FILE;
+      if (cookiesExist) infoOptions.cookies = relativeCookiesPath;
     }
 
     const output = await youtubeDl(url, infoOptions);
@@ -596,10 +626,12 @@ function downloadDirectImage(url, title, downloadId) {
 
 // Start Server-Side Download Job
 app.post('/api/download/server', (req, res) => {
-  const { url, format, title, ownerClientId } = req.body;
+  let { url, format, title, id, ownerClientId } = req.body;
   if (!url) {
     return res.status(400).json({ error: 'URL is required.' });
   }
+
+  url = cleanYoutubeUrl(url);
 
   const downloadId = Date.now().toString() + '_' + Math.random().toString(36).substr(2, 5);
 
@@ -619,6 +651,28 @@ app.post('/api/download/server', (req, res) => {
     ownerClientId: ownerClientId || null
   };
 
+  // Bandwidth optimization 2: Check if there is already an ACTIVE download running for this same URL and format!
+  const duplicateActiveJob = Object.values(activeDownloads).find(job => {
+    return job.url === url && 
+           job.format === format && 
+           (job.status === 'downloading' || job.status === 'pending');
+  });
+
+  if (duplicateActiveJob) {
+    console.log(`[Parallel Cache Hit] Linking duplicate request to active download: ${duplicateActiveJob.title}`);
+    
+    // Copy current state of active job to this new job
+    activeDownloads[downloadId].status = duplicateActiveJob.status;
+    activeDownloads[downloadId].percent = duplicateActiveJob.percent;
+    activeDownloads[downloadId].size = duplicateActiveJob.size;
+    activeDownloads[downloadId].speed = duplicateActiveJob.speed;
+    activeDownloads[downloadId].eta = duplicateActiveJob.eta;
+    activeDownloads[downloadId].filename = duplicateActiveJob.filename;
+    
+    notifyClients(downloadId);
+    return res.json({ success: true, downloadId });
+  }
+
   // Fast-path direct downloader for images
   if (format === 'image' || url.includes('.fna.fbcdn.net') || url.includes('scontent')) {
     downloadDirectImage(url, title || `Image_${downloadId}`, downloadId);
@@ -627,13 +681,74 @@ app.post('/api/download/server', (req, res) => {
 
   res.json({ success: true, downloadId });
 
+  // Bandwidth optimization: Check if a matching completed file already exists on the server!
+  let cachedFile = null;
+  if (id) {
+    try {
+      const expectedExts = format === 'mp3' 
+        ? ['.mp3', '.m4a'] 
+        : ['.mp4', '.webm', '.mkv', '.3gp'];
+      const files = fs.readdirSync(DOWNLOADS_DIR);
+      
+      // Look for a completed file that matches our unique video ID and expected extension
+      const match = files.find(f => {
+        return f.includes(`_${id}_`) && 
+               expectedExts.some(ext => f.endsWith(ext)) && 
+               !f.endsWith('.part') && 
+               !f.endsWith('.ytdl');
+      });
+      if (match) {
+        cachedFile = path.join(DOWNLOADS_DIR, match);
+        console.log(`[Cache Hit] Found existing file for optimization: ${match}`);
+      }
+    } catch (e) {
+      console.error('[Cache Check] Failed to check for existing file:', e.message);
+    }
+  }
+
+  if (cachedFile) {
+    const matchedFilename = path.basename(cachedFile);
+    
+    // Simulate a fast-path progress download for a satisfying visual UX
+    activeDownloads[downloadId].status = 'downloading';
+    activeDownloads[downloadId].filename = matchedFilename; // Reuse the existing file directly!
+    notifyClients(downloadId);
+    
+    let percent = 0;
+    const interval = setInterval(() => {
+      percent += 25;
+      if (percent >= 100) {
+        clearInterval(interval);
+        activeDownloads[downloadId].percent = 100;
+        activeDownloads[downloadId].status = 'completed';
+        activeDownloads[downloadId].speed = 'Instant (Cache)';
+        activeDownloads[downloadId].eta = '00:00';
+        notifyClients(downloadId);
+        
+        // Memory cleanup: remove completed job from cache after 10 seconds
+        setTimeout(() => {
+          if (activeDownloads[downloadId]) {
+            delete activeDownloads[downloadId];
+          }
+        }, 10000);
+      } else {
+        activeDownloads[downloadId].percent = percent;
+        activeDownloads[downloadId].speed = 'Instant (Cache)';
+        activeDownloads[downloadId].eta = '00:00';
+        notifyClients(downloadId);
+      }
+    }, 200);
+    
+    return;
+  }
+
   // Self-healing download function
   const runDownload = (isRetry = false) => {
     const isInstagramUrl = url.includes('instagram.com');
     const igCookiesExist = fs.existsSync(IG_COOKIES_FILE);
 
     const options = {
-      output: 'downloads/%(title)s.%(ext)s',
+      output: `downloads/%(title)s_%(id)s_${downloadId}.%(ext)s`,
       noWarnings: true,
       ffmpegLocation: relativeFfmpegPath,
       jsRuntimes: 'node',
@@ -641,7 +756,7 @@ app.post('/api/download/server', (req, res) => {
 
     if (isInstagramUrl) {
       // Instagram: use IG-specific cookies and mobile user-agent to bypass 401
-      if (igCookiesExist) options.cookies = IG_COOKIES_FILE;
+      if (igCookiesExist) options.cookies = relativeIgCookiesPath;
       options.addHeader = [
         'User-Agent:Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
         'Accept-Language:en-US,en;q=0.9'
@@ -651,7 +766,7 @@ app.post('/api/download/server', (req, res) => {
       options.noCheckCertificates = true;
     } else {
       // YouTube and others: use YouTube cookies
-      if (fs.existsSync(COOKIES_FILE)) options.cookies = COOKIES_FILE;
+      if (fs.existsSync(COOKIES_FILE)) options.cookies = relativeCookiesPath;
     }
 
     if (format === 'mp3') {
@@ -665,7 +780,12 @@ app.post('/api/download/server', (req, res) => {
         options.format = 'bestaudio/best';
       }
     } else if (format === '720p') {
-      options.format = 'best[height<=720]/best';
+      if (isRetry) {
+        options.format = 'best[height<=720]/best';
+      } else {
+        // Prefer YouTube's native MP4 format to avoid webm/mkv containers and merge instantly
+        options.format = 'bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720][ext=mp4]/best';
+      }
     } else if (isInstagramUrl) {
       // Instagram serves single combined streams — never use bestvideo+bestaudio
       options.format = 'best';
@@ -674,8 +794,14 @@ app.post('/api/download/server', (req, res) => {
         // Fallback: download highest pre-merged single video file (no ffmpeg merging required)
         options.format = 'best';
       } else {
-        options.format = 'bestvideo+bestaudio/best';
+        // Prefer YouTube's native MP4 format to avoid webm/mkv containers and merge instantly
+        options.format = 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best';
       }
+    }
+
+    // Force ffmpeg to merge streams into a 100% compliant MP4 container (for iOS/Safari compatibility)
+    if (format !== 'mp3' && !isInstagramUrl) {
+      options.mergeOutputFormat = 'mp4';
     }
 
     const cp = youtubeDl.exec(url, options, {
@@ -688,6 +814,7 @@ app.post('/api/download/server', (req, res) => {
 
     // Parse stdout for progress updates
     cp.stdout.on('data', data => {
+      if (!activeDownloads[downloadId]) return;
       const line = data.toString();
 
       // Check for progress line: [download]  12.4% of 34.20MiB at  2.40MiB/s ETA 00:15
@@ -699,6 +826,18 @@ app.post('/api/download/server', (req, res) => {
         activeDownloads[downloadId].eta = progressMatch[4];
         activeDownloads[downloadId].status = 'downloading';
         notifyClients(downloadId);
+
+        // Sync progress to all other parallel duplicate jobs
+        Object.entries(activeDownloads).forEach(([id, job]) => {
+          if (id !== downloadId && job.url === url && job.format === format && job.status !== 'completed' && job.status !== 'error' && job.status !== 'cancelled') {
+            job.percent = activeDownloads[downloadId].percent;
+            job.size = activeDownloads[downloadId].size;
+            job.speed = activeDownloads[downloadId].speed;
+            job.eta = activeDownloads[downloadId].eta;
+            job.status = 'downloading';
+            notifyClients(id);
+          }
+        });
       }
 
       // Check for filename destinations
@@ -710,10 +849,18 @@ app.post('/api/download/server', (req, res) => {
       if (destMatch) {
         const filePath = destMatch[1];
         activeDownloads[downloadId].filename = path.basename(filePath);
+
+        // Sync filename to all duplicate jobs
+        Object.entries(activeDownloads).forEach(([id, job]) => {
+          if (id !== downloadId && job.url === url && job.format === format && job.status !== 'completed' && job.status !== 'error' && job.status !== 'cancelled') {
+            job.filename = activeDownloads[downloadId].filename;
+          }
+        });
       }
     });
 
     cp.then(() => {
+      if (!activeDownloads[downloadId]) return;
       activeDownloads[downloadId].percent = 100;
       activeDownloads[downloadId].status = 'completed';
       activeDownloads[downloadId].speed = '--';
@@ -731,13 +878,19 @@ app.post('/api/download/server', (req, res) => {
       if (!activeDownloads[downloadId].filename) {
         try {
           const files = fs.readdirSync(DOWNLOADS_DIR);
-          // Find most recently modified file as fallback, ignoring partials
-          const newest = files
-            .filter(f => !f.endsWith('.part') && !f.endsWith('.ytdl'))
-            .map(file => ({ file, time: fs.statSync(path.join(DOWNLOADS_DIR, file)).mtime.getTime() }))
-            .sort((a, b) => b.time - a.time)[0];
-          if (newest) {
-            activeDownloads[downloadId].filename = newest.file;
+          // Find the unique file containing our downloadId suffix!
+          const matchingFile = files.find(f => f.includes(`_${downloadId}`) && !f.endsWith('.part') && !f.endsWith('.ytdl'));
+          if (matchingFile) {
+            activeDownloads[downloadId].filename = matchingFile;
+          } else {
+            // Fallback: Find most recently modified file in case of custom naming
+            const newest = files
+              .filter(f => !f.endsWith('.part') && !f.endsWith('.ytdl'))
+              .map(file => ({ file, time: fs.statSync(path.join(DOWNLOADS_DIR, file)).mtime.getTime() }))
+              .sort((a, b) => b.time - a.time)[0];
+            if (newest) {
+              activeDownloads[downloadId].filename = newest.file;
+            }
           }
         } catch (err) {
           console.error('Fallback directory check failed:', err);
@@ -745,11 +898,34 @@ app.post('/api/download/server', (req, res) => {
       }
       notifyClients(downloadId);
 
+      // Synchronize completion to all other parallel duplicate jobs!
+      Object.entries(activeDownloads).forEach(([id, job]) => {
+        if (id !== downloadId && job.url === url && job.format === format && job.status !== 'completed' && job.status !== 'error' && job.status !== 'cancelled') {
+          job.percent = 100;
+          job.status = 'completed';
+          job.speed = '--';
+          job.eta = '00:00';
+          job.filename = activeDownloads[downloadId].filename;
+          notifyClients(id);
+          
+          setTimeout(() => {
+            if (activeDownloads[id]) delete activeDownloads[id];
+          }, 10000);
+        }
+      });
+
       // Memory cleanup: remove completed job from cache after 10 seconds
       setTimeout(() => {
-        delete activeDownloads[downloadId];
+        if (activeDownloads[downloadId]) {
+          delete activeDownloads[downloadId];
+        }
       }, 10000);
     }).catch(err => {
+      if (!activeDownloads[downloadId]) return;
+      
+      // If job was manually cancelled, ignore any subprocess exit errors
+      if (activeDownloads[downloadId].status === 'cancelled') return;
+
       // PRINT ERROR LOG ON SERVER CONSOLE WITH MAXIMUM DETAILS
       console.error(`\n[DOWNLOAD ERROR] Download Job Failed! (ID: ${downloadId}, Title: ${title || 'unknown'})`);
       if (err.stderr) {
@@ -772,9 +948,24 @@ app.post('/api/download/server', (req, res) => {
         activeDownloads[downloadId].error = err.stderr || err.message;
         notifyClients(downloadId);
 
+        // Synchronize failure to all other parallel duplicate jobs!
+        Object.entries(activeDownloads).forEach(([id, job]) => {
+          if (id !== downloadId && job.url === url && job.format === format && job.status !== 'completed' && job.status !== 'error' && job.status !== 'cancelled') {
+            job.status = 'error';
+            job.error = activeDownloads[downloadId].error;
+            notifyClients(id);
+            
+            setTimeout(() => {
+              if (activeDownloads[id]) delete activeDownloads[id];
+            }, 10000);
+          }
+        });
+
         // Memory cleanup: remove failed job from cache after 10 seconds so it doesn't linger
         setTimeout(() => {
-          delete activeDownloads[downloadId];
+          if (activeDownloads[downloadId]) {
+            delete activeDownloads[downloadId];
+          }
         }, 10000);
       }
     });
@@ -796,16 +987,27 @@ app.post('/api/download/cancel', (req, res) => {
       try { job.cp.kill('SIGINT'); } catch (e) { }
     }
 
-    if (job.filename && fs.existsSync(job.filename)) {
-      try { fs.unlinkSync(job.filename); } catch (e) { }
-    } else if (job.filename && fs.existsSync(job.filename + '.part')) {
-      try { fs.unlinkSync(job.filename + '.part'); } catch (e) { }
+    // Cancel cleanup: scan downloads directory and delete any files matching this unique downloadId suffix
+    try {
+      const files = fs.readdirSync(DOWNLOADS_DIR);
+      files.forEach(f => {
+        if (f.includes(`_${downloadId}`)) {
+          const filePath = path.join(DOWNLOADS_DIR, f);
+          try { fs.unlinkSync(filePath); } catch (unlinkErr) { }
+        }
+      });
+    } catch (err) {
+      console.error('Failed to clean up files during cancellation:', err.message);
     }
 
     job.status = 'cancelled';
     notifyClients(downloadId);
 
-    setTimeout(() => { delete activeDownloads[downloadId]; }, 5000);
+    setTimeout(() => { 
+      if (activeDownloads[downloadId]) {
+        delete activeDownloads[downloadId];
+      }
+    }, 5000);
     return res.json({ success: true });
   }
 
@@ -823,7 +1025,22 @@ app.get('/api/download/file/:filename', (req, res) => {
     return res.status(404).send('File not found.');
   }
 
-  res.download(filePath, filename, (err) => {
+  // Strip the _id_downloadId or _downloadId suffix from the served filename so the user gets a clean, professional name
+  let cleanFilename = filename;
+  // Match format: "Title_videoID_downloadId.ext" (where downloadId is \d+_[a-z0-9]+)
+  // E.g. "Title_AZjlNJF9bf0_1780005524820_ewp0s.mp4"
+  const newSuffixMatch = filename.match(/(.+)(_[a-zA-Z0-9_-]+)(_\d+_[a-z0-9]+)(\.[^.]+)$/i);
+  if (newSuffixMatch) {
+    cleanFilename = newSuffixMatch[1] + newSuffixMatch[4];
+  } else {
+    // Fallback for old format: "Title_downloadId.ext"
+    const oldSuffixMatch = filename.match(/(.+)(_\d+_[a-z0-9]+)(\.[^.]+)$/i);
+    if (oldSuffixMatch) {
+      cleanFilename = oldSuffixMatch[1] + oldSuffixMatch[3];
+    }
+  }
+
+  res.download(filePath, cleanFilename, (err) => {
     if (err) {
       console.error(`Error during file download response for ${filename}:`, err.message);
     }
@@ -832,10 +1049,12 @@ app.get('/api/download/file/:filename', (req, res) => {
 
 // Direct Streaming Download (Sends binary stream straight to browser)
 app.get('/api/download/stream', (req, res) => {
-  const { url, format, title } = req.query;
+  let { url, format, title } = req.query;
   if (!url) {
     return res.status(400).send('URL query parameter is required.');
   }
+
+  url = cleanYoutubeUrl(url);
 
   const ext = format === 'mp3' ? 'mp3' : 'mp4';
   const cleanTitle = (title || 'video').replace(/[^a-zA-Z0-9]/g, '_');
@@ -895,7 +1114,7 @@ app.get('/api/library', (req, res) => {
         size: (stat.size / (1024 * 1024)).toFixed(2) + ' MB',
         bytes: stat.size,
         createdAt: stat.birthtime,
-        isVideo: !file.endsWith('.mp3')
+        isVideo: !file.endsWith('.mp3') && !file.endsWith('.m4a')
       };
     }).sort((a, b) => b.createdAt - a.createdAt);
 

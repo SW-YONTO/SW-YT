@@ -1306,3 +1306,62 @@ body {
 .download-job-card:hover .cancel-btn {
   opacity: 1;
 }
+
+/* Error State Card */
+.error-detail-card {
+  height: 400px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  border-color: rgba(255, 8, 68, 0.2) !important;
+}
+
+.error-detail-card:hover {
+  border-color: rgba(255, 8, 68, 0.4) !important;
+  box-shadow: 0 0 25px rgba(255, 8, 68, 0.15);
+}
+
+.error-icon-wrapper {
+  background: rgba(255, 8, 68, 0.08);
+  width: 74px;
+  height: 74px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 20px;
+  border: 1px solid rgba(255, 8, 68, 0.15);
+}
+
+.error-icon {
+  width: 36px;
+  height: 36px;
+  stroke: #ff0844;
+  filter: drop-shadow(0 0 4px #ff0844);
+}
+
+.error-detail-card h3 {
+  font-family: var(--font-display);
+  font-size: 1.3rem;
+  font-weight: 600;
+  margin-bottom: 6px;
+  color: #ff4e6a;
+}
+
+.error-detail-card p {
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+  max-width: 380px;
+}
+
+/* Cancelled Job Styles */
+.job-badge.status-cancelled {
+  background: rgba(255, 140, 0, 0.1);
+  color: #ff8c00;
+}
+
+.download-job-card.cancelled {
+  border-color: rgba(255, 140, 0, 0.15);
+}
