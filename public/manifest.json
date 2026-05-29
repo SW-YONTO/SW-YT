@@ -1,0 +1,49 @@
+{
+  "name": "SW-YTify Video Downloader",
+  "short_name": "SW-YTify",
+  "description": "Premium SW-YTify Video & Playlist Downloader",
+  "id": "/?source=pwa",
+  "start_url": "/?source=pwa",
+  "display": "standalone",
+  "background_color": "#0a0b10",
+  "theme_color": "#12131c",
+  "orientation": "any",
+  "categories": [
+    "utilities",
+    "entertainment"
+  ],
+  "icons": [
+    {
+      "src": "/favicon.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/favicon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/favicon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Download Video",
+      "short_name": "Download",
+      "url": "/?shortcut=download",
+      "description": "Quickly paste URL and download videos",
+      "icons": [
+        {
+          "src": "/favicon.png",
+          "sizes": "192x192"
+        }
+      ]
+    }
+  ]
+}

@@ -509,6 +509,51 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
 
+  // ----------------- PWA INSTALLATION HANDLER -----------------
+  let deferredPrompt = null;
+  const pwaInstallBtn = document.getElementById('pwa-install-btn');
+
+  window.addEventListener('beforeinstallprompt', (e) => {
+    // Prevent the mini-infobar from appearing on mobile
+    e.preventDefault();
+    // Stash the event so it can be triggered later.
+    deferredPrompt = e;
+    // Update UI to show the premium install button
+    if (pwaInstallBtn) {
+      pwaInstallBtn.classList.remove('hidden');
+      // Re-initialize icons just in case Lucide needs to render the smartphone icon inside it
+      if (window.lucide) {
+        window.lucide.createIcons();
+      }
+    }
+    console.log('[PWA] beforeinstallprompt event fired and captured');
+  });
+
+  if (pwaInstallBtn) {
+    pwaInstallBtn.addEventListener('click', async () => {
+      if (!deferredPrompt) return;
+      // Show the install prompt
+      deferredPrompt.prompt();
+      // Wait for the user to respond to the prompt
+      const { outcome } = await deferredPrompt.userChoice;
+      console.log(`[PWA] User response to the install prompt: ${outcome}`);
+      // We've used the prompt, and can't use it again
+      deferredPrompt = null;
+      // Hide the install button
+      pwaInstallBtn.classList.add('hidden');
+    });
+  }
+
+  window.addEventListener('appinstalled', (event) => {
+    // Clear the deferredPrompt
+    deferredPrompt = null;
+    // Hide the install button
+    if (pwaInstallBtn) {
+      pwaInstallBtn.classList.add('hidden');
+    }
+    console.log('[PWA] Application was successfully installed!');
+  });
+
   // Expose global cancel function for the inline onclick handler
   window.cancelDownload = async (id) => {
     try {

@@ -23,6 +23,14 @@
   <!-- Lucide Icons via CDN for modern clean SVG icons -->
   <script src="https://unpkg.com/lucide@latest"></script>
   <link rel="stylesheet" href="/style.css?v=<%= buildVersion %>">
+  
+  <!-- PWA Manifest & Mobile Capability Meta Tags -->
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#0a0b10">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="SW-YTify">
+  <link rel="apple-touch-icon" href="/favicon.png">
 </head>
 <body>
 
@@ -39,6 +47,11 @@
         <h1>SW-<span>YTify</span></h1>
       </div>
       <p class="tagline">Next-generation YouTube Video & Playlist Downloader</p>
+      
+      <!-- Premium PWA Install Button (Hidden by default, shown dynamically via prompt interceptor) -->
+      <button id="pwa-install-btn" class="pwa-install-btn hidden" aria-label="Install App" title="Install App">
+        <i data-lucide="smartphone"></i> Install App
+      </button>
     </header>
 
     <!-- Paste URL Area -->
@@ -228,6 +241,15 @@
   <script>
     // Initialize Lucide Icons
     lucide.createIcons();
+
+    // Register Service Worker for PWA
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js')
+          .then(reg => console.log('[PWA] Service Worker registered with scope:', reg.scope))
+          .catch(err => console.error('[PWA] Service Worker registration failed:', err));
+      });
+    }
   </script>
 </body>
 </html>
